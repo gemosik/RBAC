@@ -14,7 +14,9 @@ public class Role {
         this.description = description.trim();
         this.permissions = new HashSet<>();
     }
-
+    public String getName(){
+        return this.name;
+    }
     public void addPermission(Permission permission) {
         permissions.add(permission);
     }
