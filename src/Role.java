@@ -14,6 +14,9 @@ public class Role {
         this.description = description.trim();
         this.permissions = new HashSet<>();
     }
+    public String getId() {
+        return id;
+    }
     public String getName(){
         return this.name;
     }
