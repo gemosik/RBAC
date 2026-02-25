@@ -8,5 +8,4 @@ public interface Repository<T> {
     List<T> findAll();
     int count();
     void clear();
-
 }
