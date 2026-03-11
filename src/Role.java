@@ -20,6 +20,26 @@ public class Role {
     public String getName(){
         return this.name;
     }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setName(String name) {
+        validateNull(name, "name");
+        this.name = name.trim();
+    }
+
+    public void setDescription(String description) {
+        validateNull(description, "description");
+        this.description = description.trim();
+    }
+
+    public void update(String newName, String newDescription) {
+        setName(newName);
+        setDescription(newDescription);
+    }
+
     public void addPermission(Permission permission) {
         permissions.add(permission);
     }

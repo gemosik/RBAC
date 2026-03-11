@@ -124,6 +124,27 @@ public class RoleManager implements Repository<Role> {
         role.removePermission(permission);
     }
 
+    public void updateRole(String currentName, String newName, String newDescription) {
+        Objects.requireNonNull(currentName, "currentName не может быть null");
+        Objects.requireNonNull(newName, "newName не может быть null");
+        Objects.requireNonNull(newDescription, "newDescription не может быть null");
+
+        Role existing = rolesByName.get(currentName);
+        if (existing == null) {
+            throw new NoSuchElementException("Роль с именем " + currentName + " не найдена");
+        }
+
+        String normalizedNewName = newName.trim();
+        if (!existing.getName().equals(normalizedNewName) && rolesByName.containsKey(normalizedNewName)) {
+            throw new IllegalArgumentException("Роль с таким именем уже существует: " + normalizedNewName);
+        }
+
+        rolesByName.remove(existing.getName());
+        existing.update(normalizedNewName, newDescription);
+        rolesByName.put(existing.getName(), existing);
+        rolesById.put(existing.getId(), existing);
+    }
+
     public List<Role> findRolesWithPermission(String permissionName, String resource) {
         Objects.requireNonNull(permissionName, "permissionName не может быть null");
         Objects.requireNonNull(resource, "resource не может быть null");
