@@ -56,13 +56,16 @@ public final class CommandRegistry {
     private static void userList(Scanner scanner, RBACSystem system) {
         UserManager um = system.getUserManager();
 
+        System.out.print("Фильтры (key=value через пробел, пусто = все). Доступно: username, email, domain, name: ");
+        String line = scanner.nextLine().trim();
+
         List<User> users;
-        if (scanner != null && scanner.hasNext()) {
-            UserFilter filter = parseUserListFilters(scanner);
-            users = um.findAll(filter, UserSorters.byUsername());
-        } else {
+        if (line.isEmpty()) {
             users = um.findAll();
             users.sort(UserSorters.byUsername());
+        } else {
+            UserFilter filter = parseUserListFilters(line);
+            users = um.findAll(filter, UserSorters.byUsername());
         }
 
         printUsersTable(users);
@@ -204,10 +207,9 @@ public final class CommandRegistry {
         printUsersTable(result);
     }
 
-    private static UserFilter parseUserListFilters(Scanner scanner) {
+    private static UserFilter parseUserListFilters(String line) {
         UserFilter filter = user -> true;
-        while (scanner.hasNext()) {
-            String token = scanner.next();
+        for (String token : line.split("\\s+")) {
             int eq = token.indexOf('=');
             if (eq <= 0) {
                 continue;
