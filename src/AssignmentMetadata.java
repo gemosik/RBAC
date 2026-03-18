@@ -1,15 +1,8 @@
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
-
 public record AssignmentMetadata(String assignedBy, String assignedAt, String reason) {
-
-    private static final DateTimeFormatter FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public static AssignmentMetadata now(String assignedBy, String reason){
         ValidationUtils.requireNonEmpty(assignedBy, "assignedBy");
-        String currentTime = LocalDateTime.now().format(FORMATTER);
+        String currentTime = new DateUtils().getCurrentDateTime();
         return new AssignmentMetadata(ValidationUtils.normalizeString(assignedBy),
                 currentTime,
                 reason != null ? ValidationUtils.normalizeString(reason) : null);
