@@ -50,6 +50,10 @@ public final class CommandRegistry {
         parser.registerCommand("permissions-user", "Права пользователя (по ресурсам)", CommandRegistry::permissionsUser);
         parser.registerCommand("permissions-check", "Проверка права у пользователя", CommandRegistry::permissionsCheck);
         parser.registerCommand("audit-log", "Просмотр audit log (и сохранение в файл)", CommandRegistry::auditLog);
+
+        parser.registerCommand("report-users", "Отчёт по пользователям с их ролями (вывести/сохранить)", CommandRegistry::reportUsers);
+        parser.registerCommand("report-roles", "Отчёт по ролям с количеством пользователей (вывести/сохранить)", CommandRegistry::reportRoles);
+        parser.registerCommand("report-matrix", "Матрица прав (users × resources) (вывести/сохранить)", CommandRegistry::reportMatrix);
     }
 
 
@@ -567,6 +571,35 @@ public final class CommandRegistry {
         if (confirm(scanner, "Сохранить лог в файл? (введите \"да\")")) {
             String filename = promptNonBlank(scanner, "filename");
             log.saveToFile(filename);
+        }
+    }
+
+    private static void reportUsers(Scanner scanner, RBACSystem system) {
+        ReportGenerator rg = new ReportGenerator();
+        String report = rg.generateUserReport(system.getUserManager(), system.getAssignmentManager());
+        System.out.println(report);
+        exportReport(scanner, rg, report);
+    }
+
+    private static void reportRoles(Scanner scanner, RBACSystem system) {
+        ReportGenerator rg = new ReportGenerator();
+        String report = rg.generateRoleReport(system.getRoleManager(), system.getAssignmentManager());
+        System.out.println(report);
+        exportReport(scanner, rg, report);
+    }
+
+    private static void reportMatrix(Scanner scanner, RBACSystem system) {
+        ReportGenerator rg = new ReportGenerator();
+        String report = rg.generatePermissionMatrix(system.getUserManager(), system.getAssignmentManager());
+        System.out.println(report);
+        exportReport(scanner, rg, report);
+    }
+
+    private static void exportReport(Scanner scanner, ReportGenerator rg, String report) {
+        if (confirm(scanner, "Сохранить отчёт в файл? (введите \"да\")")) {
+            String filename = promptNonBlank(scanner, "filename");
+            rg.exportToFile(report, filename);
+            System.out.println("Отчёт сохранён в файл: " + filename);
         }
     }
 
