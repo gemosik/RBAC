@@ -1,17 +1,17 @@
 public record Permission(String name, String resource, String description) {
 
     public Permission(String name, String resource, String description) {
-        validateNull(name, "name");
-        validateNull(resource, "resource");
-        validateNull(description,"description");
+        ValidationUtils.requireNonEmpty(name, "name");
+        ValidationUtils.requireNonEmpty(resource, "resource");
+        ValidationUtils.requireNonEmpty(description,"description");
 
-        String normalizedName = name.trim().toUpperCase();
+        String normalizedName = ValidationUtils.normalizeString(name).toUpperCase();
         if (normalizedName.contains(" ")) {
             throw new IllegalArgumentException("Name не может содержать пробелы");
         }
 
-        String normalizedResource = resource.trim().toLowerCase();
-        String normalizedDescription = description.trim();
+        String normalizedResource = ValidationUtils.normalizeString(resource).toLowerCase();
+        String normalizedDescription = ValidationUtils.normalizeString(description);
 
         this.name = normalizedName;
         this.resource = normalizedResource;
@@ -28,12 +28,6 @@ public record Permission(String name, String resource, String description) {
         }
         return name.contains(namePattern.toUpperCase()) &&
                 resource.contains(resourcePattern.toLowerCase());
-    }
-
-    private static void validateNull(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(name + " не может быть пустым");
-        }
     }
 
     public static void main(){

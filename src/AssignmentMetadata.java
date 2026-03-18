@@ -8,11 +8,11 @@ public record AssignmentMetadata(String assignedBy, String assignedAt, String re
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public static AssignmentMetadata now(String assignedBy, String reason){
-        validateNull(assignedBy, "assignedBy");
+        ValidationUtils.requireNonEmpty(assignedBy, "assignedBy");
         String currentTime = LocalDateTime.now().format(FORMATTER);
-        return new AssignmentMetadata(assignedBy.trim(),
+        return new AssignmentMetadata(ValidationUtils.normalizeString(assignedBy),
                 currentTime,
-                reason != null ? reason.trim() : null);
+                reason != null ? ValidationUtils.normalizeString(reason) : null);
     }
 
     public String format() {
@@ -20,12 +20,6 @@ public record AssignmentMetadata(String assignedBy, String assignedAt, String re
                 assignedBy,
                 assignedAt,
                 reason != null ? " (Reason: " + reason + ")" : "");
-    }
-
-    private static void validateNull(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(name + " не может быть пустым");
-        }
     }
 
     public static void main(){

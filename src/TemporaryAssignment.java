@@ -104,15 +104,12 @@ public class TemporaryAssignment extends AbstractRoleAssignment {
     }
 
     private void validateExpirationDate(String expiresAt) {
-        if (expiresAt == null || expiresAt.trim().isEmpty()) {
-            throw new IllegalArgumentException("Дата истечения не может быть пустой");
-        }
-
-        try {
-            parseDateTime(expiresAt);
-        } catch (Exception e) {
+        ValidationUtils.requireNonEmpty(expiresAt, "expiresAt");
+        String normalized = ValidationUtils.normalizeString(expiresAt);
+        if (!ValidationUtils.isValidDate(normalized)) {
             throw new IllegalArgumentException("Неверный формат даты. Используйте YYYY-MM-DD или YYYY-MM-DD HH:MM");
         }
+        parseDateTime(normalized);
     }
 
     @Override

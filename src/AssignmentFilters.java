@@ -44,7 +44,11 @@ public class AssignmentFilters {
 
             String expiresAt = temp.getExpiresAt();
 
-            String normalizedInput = normalizeDateTimeLikeTemporary(dateTime);
+            ValidationUtils.requireNonEmpty(dateTime, "dateTime");
+            String normalizedInput = normalizeDateTimeLikeTemporary(ValidationUtils.normalizeString(dateTime));
+            if (!ValidationUtils.isValidDate(normalizedInput)) {
+                throw new IllegalArgumentException("Неверный формат даты. Используйте YYYY-MM-DD или YYYY-MM-DD HH:MM");
+            }
 
             java.time.format.DateTimeFormatter formatter =
                     java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");

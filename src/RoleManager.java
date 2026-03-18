@@ -125,22 +125,25 @@ public class RoleManager implements Repository<Role> {
     }
 
     public void updateRole(String currentName, String newName, String newDescription) {
-        Objects.requireNonNull(currentName, "currentName не может быть null");
-        Objects.requireNonNull(newName, "newName не может быть null");
-        Objects.requireNonNull(newDescription, "newDescription не может быть null");
+        ValidationUtils.requireNonEmpty(currentName, "currentName");
+        ValidationUtils.requireNonEmpty(newName, "newName");
+        ValidationUtils.requireNonEmpty(newDescription, "newDescription");
 
-        Role existing = rolesByName.get(currentName);
+        String normalizedCurrentName = ValidationUtils.normalizeString(currentName);
+        String normalizedNewName = ValidationUtils.normalizeString(newName);
+        String normalizedNewDescription = ValidationUtils.normalizeString(newDescription);
+
+        Role existing = rolesByName.get(normalizedCurrentName);
         if (existing == null) {
-            throw new NoSuchElementException("Роль с именем " + currentName + " не найдена");
+            throw new NoSuchElementException("Роль с именем " + normalizedCurrentName + " не найдена");
         }
 
-        String normalizedNewName = newName.trim();
         if (!existing.getName().equals(normalizedNewName) && rolesByName.containsKey(normalizedNewName)) {
             throw new IllegalArgumentException("Роль с таким именем уже существует: " + normalizedNewName);
         }
 
         rolesByName.remove(existing.getName());
-        existing.update(normalizedNewName, newDescription);
+        existing.update(normalizedNewName, normalizedNewDescription);
         rolesByName.put(existing.getName(), existing);
         rolesById.put(existing.getId(), existing);
     }

@@ -7,11 +7,11 @@ public class Role {
     private final Set<Permission> permissions;
 
     public Role(String name, String description) {
-        validateNull(name, "name");
-        validateNull(description,"description");
+        ValidationUtils.requireNonEmpty(name, "name");
+        ValidationUtils.requireNonEmpty(description,"description");
         this.id = "role_" + UUID.randomUUID().toString();
-        this.name = name.trim();
-        this.description = description.trim();
+        this.name = ValidationUtils.normalizeString(name);
+        this.description = ValidationUtils.normalizeString(description);
         this.permissions = new HashSet<>();
     }
     public String getId() {
@@ -26,13 +26,13 @@ public class Role {
     }
 
     public void setName(String name) {
-        validateNull(name, "name");
-        this.name = name.trim();
+        ValidationUtils.requireNonEmpty(name, "name");
+        this.name = ValidationUtils.normalizeString(name);
     }
 
     public void setDescription(String description) {
-        validateNull(description, "description");
-        this.description = description.trim();
+        ValidationUtils.requireNonEmpty(description, "description");
+        this.description = ValidationUtils.normalizeString(description);
     }
 
     public void update(String newName, String newDescription) {
@@ -94,12 +94,6 @@ public class Role {
     @Override
     public String toString() {
         return String.format("Role{id='%s', name='%s', permissions=%d}", id, name, permissions.size());
-    }
-
-    private static void validateNull(String value, String name) {
-        if (value == null || value.trim().isEmpty()) {
-            throw new IllegalArgumentException(name + " не может быть пустым");
-        }
     }
 
     public static void main(){
