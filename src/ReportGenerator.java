@@ -84,7 +84,6 @@ public class ReportGenerator {
         }
 
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"#", "role", "users(active)", "permissions"});
 
         int i = 1;
         for (Role role : roles) {
@@ -97,7 +96,10 @@ public class ReportGenerator {
             });
         }
 
-        sb.append(renderTable(rows));
+        sb.append(FormatUtils.formatTable(
+                new String[]{"#", "Role", "Users (active)", "Permissions"},
+                rows
+        ));
         sb.append(System.lineSeparator());
         return sb.toString();
     }
@@ -138,11 +140,14 @@ public class ReportGenerator {
             return sb.toString();
         }
 
+        String[] headers = new String[1 + resources.size()];
+        headers[0] = "User";
+        int hi = 1;
+        for (String res : resources) {
+            headers[hi++] = res;
+        }
+
         List<String[]> rows = new ArrayList<>();
-        List<String> header = new ArrayList<>();
-        header.add("user");
-        header.addAll(resources);
-        rows.add(header.toArray(new String[0]));
 
         for (User u : users) {
             List<String> row = new ArrayList<>();
@@ -156,7 +161,7 @@ public class ReportGenerator {
             rows.add(row.toArray(new String[0]));
         }
 
-        sb.append(renderTable(rows));
+        sb.append(FormatUtils.formatTable(headers, rows));
         sb.append(System.lineSeparator());
         sb.append(String.format("Legend: cell содержит список permission.name (например, READ,WRITE).%n"));
         return sb.toString();
@@ -187,43 +192,5 @@ public class ReportGenerator {
             usernames.add(a.user().username());
         }
         return usernames.size();
-    }
-
-    private static String renderTable(List<String[]> rows) {
-        int cols = rows.stream().mapToInt(r -> r.length).max().orElse(0);
-        int[] widths = new int[cols];
-
-        for (String[] row : rows) {
-            for (int c = 0; c < row.length; c++) {
-                widths[c] = Math.max(widths[c], safe(row[c]).length());
-            }
-        }
-
-        StringBuilder out = new StringBuilder();
-        for (int r = 0; r < rows.size(); r++) {
-            String[] row = rows.get(r);
-            StringBuilder line = new StringBuilder();
-            for (int c = 0; c < cols; c++) {
-                String cell = c < row.length ? safe(row[c]) : "";
-                line.append(padRight(cell, widths[c]));
-                if (c != cols - 1) {
-                    line.append(" | ");
-                }
-            }
-            out.append(line).append(System.lineSeparator());
-            if (r == 0) {
-                out.append("-".repeat(line.length())).append(System.lineSeparator());
-            }
-        }
-        return out.toString();
-    }
-
-    private static String safe(String s) {
-        return s == null ? "" : s;
-    }
-
-    private static String padRight(String s, int width) {
-        if (s.length() >= width) return s;
-        return s + " ".repeat(width - s.length());
     }
 }

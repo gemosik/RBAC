@@ -41,19 +41,18 @@ public class CommandParser {
 
     public void printHelp() {
         if (commands.isEmpty()) {
-            System.out.println("Команды не зарегистрированы.");
+            System.out.println(FormatUtils.formatBox("Команды не зарегистрированы."));
             return;
         }
 
-        System.out.println("Доступные команды:");
-        for (String name : commands.keySet()) {
-            String desc = commandDescriptions.getOrDefault(name, "");
-            if (desc.isBlank()) {
-                System.out.println("- " + name);
-            } else {
-                System.out.println("- " + name + " — " + desc);
-            }
+        System.out.println(ConsoleUtils.formatHeader("Доступные команды"));
+        var names = commands.keySet().stream().sorted().toList();
+        var rows = new java.util.ArrayList<String[]>();
+        for (String name : names) {
+            String desc = commandDescriptions.getOrDefault(name, "").trim();
+            rows.add(new String[]{name, desc.isBlank() ? "—" : desc});
         }
+        System.out.println(FormatUtils.formatTable(new String[]{"Command", "Description"}, rows));
     }
 
     public void parseAndExecute(String input, Scanner scanner, RBACSystem system) {

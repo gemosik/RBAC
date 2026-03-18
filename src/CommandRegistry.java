@@ -107,38 +107,48 @@ public final class CommandRegistry {
         String username = ConsoleUtils.promptString(scanner, "username", true);
         Optional<User> opt = um.findByUsername(username);
         if (opt.isEmpty()) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             return;
         }
 
         User user = opt.get();
-        System.out.println(user.format());
+        System.out.println(FormatUtils.formatBox(user.format()));
 
         List<RoleAssignment> assignments = am.findByUser(user);
         List<RoleAssignment> active = assignments.stream().filter(RoleAssignment::isActive).toList();
 
         System.out.println();
-        System.out.println("Назначенные роли (активные): " + active.size());
+        System.out.println(ConsoleUtils.formatHeader("Назначенные роли (активные): " + active.size()));
         if (active.isEmpty()) {
-            System.out.println("- (нет)");
+            System.out.println(FormatUtils.formatBox("(нет)"));
         } else {
-            for (RoleAssignment a : active) {
-                System.out.println("- " + a.role().getName() + " [" + a.assignmentType() + "] (id=" + a.assignmentId() + ")");
+            List<String[]> rows = new ArrayList<>();
+            for (RoleAssignment a : active.stream().sorted(AssignmentSorters.byRoleName()).toList()) {
+                rows.add(new String[]{a.role().getName(), a.assignmentType(), a.assignmentId()});
             }
+            System.out.println(FormatUtils.formatTable(
+                    new String[]{"Role", "Type", "Assignment ID"},
+                    rows
+            ));
         }
 
         Set<Permission> perms = am.getUserPermissions(user);
         System.out.println();
-        System.out.println("Права (" + perms.size() + "):");
+        System.out.println(ConsoleUtils.formatHeader("Права (" + perms.size() + ")"));
         if (perms.isEmpty()) {
-            System.out.println("- (нет)");
+            System.out.println(FormatUtils.formatBox("(нет)"));
         } else {
             Map<String, List<Permission>> byResource = groupPermissionsByResource(perms);
             for (String resource : byResource.keySet().stream().sorted().toList()) {
-                System.out.println(resource + ":");
-                for (Permission p : byResource.get(resource)) {
-                    System.out.println("  - " + p.name() + " — " + p.description());
+                System.out.println();
+                System.out.println(ConsoleUtils.formatHeader(resource));
+                List<String[]> rows = new ArrayList<>();
+                for (Permission p : byResource.get(resource).stream()
+                        .sorted(Comparator.comparing(Permission::name))
+                        .toList()) {
+                    rows.add(new String[]{p.name(), p.description()});
                 }
+                System.out.println(FormatUtils.formatTable(new String[]{"Permission", "Description"}, rows));
             }
         }
     }
@@ -297,11 +307,11 @@ public final class CommandRegistry {
 
         Optional<Role> opt = rm.findByName(roleName);
         if (opt.isEmpty()) {
-            System.out.println("Роль не найдена: " + roleName);
+            System.out.println(FormatUtils.formatBox("Роль не найдена: " + roleName));
             return;
         }
 
-        System.out.println(opt.get().format());
+        System.out.println(FormatUtils.formatBox(opt.get().format()));
     }
 
     private static void roleUpdate(Scanner scanner, RBACSystem system) {
@@ -334,7 +344,7 @@ public final class CommandRegistry {
         String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         Optional<Role> opt = rm.findByName(roleName);
         if (opt.isEmpty()) {
-            System.out.println("Роль не найдена: " + roleName);
+            System.out.println(FormatUtils.formatBox("Роль не найдена: " + roleName));
             system.getAuditLog().log("ROLE_DELETE_FAILED", performer, roleName, "role not found");
             return;
         }
@@ -342,12 +352,14 @@ public final class CommandRegistry {
         Role role = opt.get();
         List<RoleAssignment> assigned = am.findByRole(role);
         if (!assigned.isEmpty()) {
-            System.out.println("Роль назначена пользователям, удалить нельзя. Пользователи:");
-            assigned.stream()
+            System.out.println(FormatUtils.formatBox("Роль назначена пользователям, удалить нельзя."));
+            List<String[]> rows = assigned.stream()
                     .map(a -> a.user().username())
                     .distinct()
                     .sorted()
-                    .forEach(u -> System.out.println("- " + u));
+                    .map(u -> new String[]{u})
+                    .toList();
+            System.out.println(FormatUtils.formatTable(new String[]{"Users"}, rows));
             system.getAuditLog().log("ROLE_DELETE_FAILED", performer, roleName, "role is assigned (" + assigned.size() + " assignment(s))");
             return;
         }
@@ -455,7 +467,7 @@ public final class CommandRegistry {
         String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             system.getAuditLog().log("ASSIGN_ROLE_FAILED", performer, username, "user not found");
             return;
         }
@@ -463,7 +475,7 @@ public final class CommandRegistry {
         List<Role> roles = rm.findAll();
         roles.sort(RoleSorters.byName());
         if (roles.isEmpty()) {
-            System.out.println("Роли отсутствуют.");
+            System.out.println(FormatUtils.formatBox("Роли отсутствуют."));
             return;
         }
 
@@ -507,7 +519,7 @@ public final class CommandRegistry {
         String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             system.getAuditLog().log("REVOKE_ROLE_FAILED", performer, username, "user not found");
             return;
         }
@@ -518,7 +530,7 @@ public final class CommandRegistry {
                 .toList();
 
         if (active.isEmpty()) {
-            System.out.println("Активных назначений нет.");
+            System.out.println(FormatUtils.formatBox("Активных назначений нет."));
             return;
         }
 
@@ -608,7 +620,7 @@ public final class CommandRegistry {
         String username = ConsoleUtils.promptString(scanner, "username", true);
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             return;
         }
 
@@ -625,7 +637,7 @@ public final class CommandRegistry {
         String roleName = ConsoleUtils.promptString(scanner, "role name", true);
         Role role = rm.findByName(roleName).orElse(null);
         if (role == null) {
-            System.out.println("Роль не найдена: " + roleName);
+            System.out.println(FormatUtils.formatBox("Роль не найдена: " + roleName));
             return;
         }
 
@@ -633,16 +645,18 @@ public final class CommandRegistry {
         list.sort(AssignmentSorters.byUsername());
 
         if (list.isEmpty()) {
-            System.out.println("Назначений для роли нет.");
+            System.out.println(FormatUtils.formatBox("Назначений для роли нет."));
             return;
         }
 
-        System.out.println("Пользователи с ролью " + role.getName() + ":");
-        list.stream()
+        System.out.println(ConsoleUtils.formatHeader("Пользователи с ролью " + role.getName()));
+        List<String[]> rows = list.stream()
                 .map(a -> a.user().username())
                 .distinct()
                 .sorted()
-                .forEach(u -> System.out.println("- " + u));
+                .map(u -> new String[]{u})
+                .toList();
+        System.out.println(FormatUtils.formatTable(new String[]{"Username"}, rows));
     }
 
     private static void assignmentActive(Scanner scanner, RBACSystem system) {
@@ -706,22 +720,25 @@ public final class CommandRegistry {
         String username = ConsoleUtils.promptString(scanner, "username", true);
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             return;
         }
 
         Set<Permission> perms = am.getUserPermissions(user);
         if (perms.isEmpty()) {
-            System.out.println("У пользователя нет прав.");
+            System.out.println(FormatUtils.formatBox("У пользователя нет прав."));
             return;
         }
 
         Map<String, List<Permission>> byResource = groupPermissionsByResource(perms);
         for (String resource : byResource.keySet().stream().sorted().toList()) {
-            System.out.println(resource + ":");
-            byResource.get(resource).stream()
+            System.out.println();
+            System.out.println(ConsoleUtils.formatHeader(resource));
+            List<String[]> rows = byResource.get(resource).stream()
                     .sorted(Comparator.comparing(Permission::name))
-                    .forEach(p -> System.out.println("  - " + p.name() + " — " + p.description()));
+                    .map(p -> new String[]{p.name(), p.description()})
+                    .toList();
+            System.out.println(FormatUtils.formatTable(new String[]{"Permission", "Description"}, rows));
         }
     }
 
@@ -733,7 +750,7 @@ public final class CommandRegistry {
         String username = ConsoleUtils.promptString(scanner, "username", true);
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
-            System.out.println("Пользователь не найден: " + username);
+            System.out.println(FormatUtils.formatBox("Пользователь не найден: " + username));
             return;
         }
 
@@ -742,7 +759,7 @@ public final class CommandRegistry {
 
         boolean has = am.userHasPermission(user, permName, resource);
         if (!has) {
-            System.out.println("НЕТ: у пользователя нет такого права.");
+            System.out.println(FormatUtils.formatBox("НЕТ: у пользователя нет такого права."));
             return;
         }
 
@@ -755,8 +772,11 @@ public final class CommandRegistry {
         }
         roles = roles.stream().distinct().sorted().toList();
 
-        System.out.println("ДА: право есть.");
-        System.out.println("Роли, дающие это право: " + String.join(", ", roles));
+        System.out.println(FormatUtils.formatBox("ДА: право есть."));
+        System.out.println(FormatUtils.formatTable(
+                new String[]{"Roles granting permission"},
+                roles.stream().map(r -> new String[]{r}).toList()
+        ));
     }
 
 
@@ -786,18 +806,26 @@ public final class CommandRegistry {
 
         System.out.println(system.generateStatistics());
         System.out.println();
-        System.out.println("Дополнительно:");
-        System.out.println("Истёкших временных назначений: " + expiredAssignments);
-        System.out.printf(Locale.ROOT, "Среднее количество ролей на пользователя (по активным назначениям): %.2f%n", avgRolesPerUser);
+        System.out.println(ConsoleUtils.formatHeader("Дополнительно"));
+        System.out.println(FormatUtils.formatTable(
+                new String[]{"Metric", "Value"},
+                List.of(
+                        new String[]{"Истёкших временных назначений", String.valueOf(expiredAssignments)},
+                        new String[]{"Среднее ролей на пользователя (активные)", String.format(Locale.ROOT, "%.2f", avgRolesPerUser)}
+                )
+        ));
 
-        System.out.println("Топ-3 самых популярных ролей (активные назначения):");
+        System.out.println();
+        System.out.println(ConsoleUtils.formatHeader("Топ-3 самых популярных ролей (активные назначения)"));
         if (top.isEmpty()) {
-            System.out.println("- (нет)");
+            System.out.println(FormatUtils.formatBox("(нет)"));
         } else {
+            List<String[]> rows = new ArrayList<>();
             for (int i = 0; i < top.size(); i++) {
                 var e = top.get(i);
-                System.out.println((i + 1) + ") " + e.getKey() + " — " + e.getValue());
+                rows.add(new String[]{String.valueOf(i + 1), e.getKey(), String.valueOf(e.getValue())});
             }
+            System.out.println(FormatUtils.formatTable(new String[]{"#", "Role", "Active assignments"}, rows));
         }
     }
 
@@ -825,43 +853,39 @@ public final class CommandRegistry {
 
     private static void printUsersTable(List<User> users) {
         if (users == null || users.isEmpty()) {
-            System.out.println("Пользователи не найдены.");
+            System.out.println(FormatUtils.formatBox("Пользователи не найдены."));
             return;
         }
 
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"#", "username", "fullName", "email"});
         int i = 1;
         for (User u : users) {
             rows.add(new String[]{String.valueOf(i++), u.username(), u.fullName(), u.email()});
         }
-        printTable(rows);
+        System.out.println(FormatUtils.formatTable(new String[]{"#", "Username", "Full Name", "Email"}, rows));
     }
 
     private static void printRolesTable(List<Role> roles) {
         if (roles == null || roles.isEmpty()) {
-            System.out.println("Роли не найдены.");
+            System.out.println(FormatUtils.formatBox("Роли не найдены."));
             return;
         }
 
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"#", "name", "permissions", "id"});
         int i = 1;
         for (Role r : roles) {
             rows.add(new String[]{String.valueOf(i++), r.getName(), String.valueOf(r.getPermissions().size()), r.getId()});
         }
-        printTable(rows);
+        System.out.println(FormatUtils.formatTable(new String[]{"#", "Name", "Permissions", "ID"}, rows));
     }
 
     private static void printAssignmentsTable(List<RoleAssignment> list) {
         if (list == null || list.isEmpty()) {
-            System.out.println("Назначения не найдены.");
+            System.out.println(FormatUtils.formatBox("Назначения не найдены."));
             return;
         }
 
         List<String[]> rows = new ArrayList<>();
-        rows.add(new String[]{"#", "username", "role", "type", "status", "assigned at", "id"});
-
         int i = 1;
         for (RoleAssignment a : list) {
             String status;
@@ -881,41 +905,10 @@ public final class CommandRegistry {
             });
         }
 
-        printTable(rows);
-    }
-
-    private static void printTable(List<String[]> rows) {
-        int cols = rows.stream().mapToInt(r -> r.length).max().orElse(0);
-        int[] widths = new int[cols];
-
-        for (String[] row : rows) {
-            for (int c = 0; c < row.length; c++) {
-                widths[c] = Math.max(widths[c], safe(row[c]).length());
-            }
-        }
-
-        for (int r = 0; r < rows.size(); r++) {
-            String[] row = rows.get(r);
-            StringBuilder sb = new StringBuilder();
-            for (int c = 0; c < cols; c++) {
-                String cell = c < row.length ? safe(row[c]) : "";
-                sb.append(padRight(cell, widths[c]));
-                if (c != cols - 1) sb.append(" | ");
-            }
-            System.out.println(sb);
-            if (r == 0) {
-                System.out.println("-".repeat(sb.length()));
-            }
-        }
-    }
-
-    private static String safe(String s) {
-        return s == null ? "" : s;
-    }
-
-    private static String padRight(String s, int width) {
-        if (s.length() >= width) return s;
-        return s + " ".repeat(width - s.length());
+        System.out.println(FormatUtils.formatTable(
+                new String[]{"#", "Username", "Role", "Type", "Status", "Assigned at", "ID"},
+                rows
+        ));
     }
 
     private static Map<String, List<Permission>> groupPermissionsByResource(Set<Permission> perms) {

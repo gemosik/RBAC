@@ -97,13 +97,8 @@ public final class ConsoleUtils {
     }
 
     public static String formatHeader(String title) {
-        String t = title == null ? "" : title.trim();
-        if (t.isEmpty()) return "";
-
-        String line = "─".repeat(Math.max(8, Math.min(80, t.length() + 6)));
-        String header = "┌" + line + "┐" + System.lineSeparator()
-                + "│  " + t + "  │" + System.lineSeparator()
-                + "└" + line + "┘";
+        String header = FormatUtils.formatHeader(title);
+        if (header.isEmpty()) return "";
         return ANSI_ENABLED ? (ANSI_CYAN + ANSI_BOLD + header + ANSI_RESET) : header;
     }
 
