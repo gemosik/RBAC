@@ -49,6 +49,7 @@ public final class CommandRegistry {
 
         parser.registerCommand("permissions-user", "Права пользователя (по ресурсам)", CommandRegistry::permissionsUser);
         parser.registerCommand("permissions-check", "Проверка права у пользователя", CommandRegistry::permissionsCheck);
+        parser.registerCommand("audit-log", "Просмотр audit log (и сохранение в файл)", CommandRegistry::auditLog);
     }
 
 
@@ -78,12 +79,15 @@ public final class CommandRegistry {
         String fullName = promptNonBlank(scanner, "fullName");
         String email = promptNonBlank(scanner, "email");
 
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         try {
             User user = User.create(username, fullName, email);
             um.add(user);
             System.out.println("Пользователь создан: " + user.format());
+            system.getAuditLog().log("USER_CREATE", performer, username, "fullName=" + fullName + ", email=" + email);
         } catch (Exception e) {
             System.out.println("Ошибка создания пользователя: " + e.getMessage());
+            system.getAuditLog().log("USER_CREATE_FAILED", performer, username, e.getMessage());
         }
     }
 
@@ -156,9 +160,11 @@ public final class CommandRegistry {
         AssignmentManager am = system.getAssignmentManager();
 
         String username = promptNonBlank(scanner, "username");
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         Optional<User> opt = um.findByUsername(username);
         if (opt.isEmpty()) {
             System.out.println("Пользователь не найден: " + username);
+            system.getAuditLog().log("USER_DELETE_FAILED", performer, username, "user not found");
             return;
         }
 
@@ -166,10 +172,10 @@ public final class CommandRegistry {
         System.out.println("Удалить пользователя: " + user.format());
         if (!confirm(scanner, "Подтвердите удаление (введите \"да\")")) {
             System.out.println("Удаление отменено.");
+            system.getAuditLog().log("USER_DELETE_CANCELLED", performer, username, "cancelled by user");
             return;
         }
 
-        // remove assignments
         List<RoleAssignment> toRemove = am.findByUser(user);
         for (RoleAssignment a : toRemove) {
             am.remove(a);
@@ -177,6 +183,12 @@ public final class CommandRegistry {
 
         boolean removed = um.remove(user);
         System.out.println(removed ? "Пользователь удалён." : "Не удалось удалить пользователя.");
+        system.getAuditLog().log(
+                removed ? "USER_DELETE" : "USER_DELETE_FAILED",
+                performer,
+                username,
+                removed ? "removed with " + toRemove.size() + " assignment(s)" : "remove returned false"
+        );
     }
 
     private static void userSearch(Scanner scanner, RBACSystem system) {
@@ -247,6 +259,7 @@ public final class CommandRegistry {
         String name = promptNonBlank(scanner, "role name");
         String description = promptNonBlank(scanner, "description");
 
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         try {
             Role role = new Role(name, description);
 
@@ -258,8 +271,10 @@ public final class CommandRegistry {
 
             rm.add(role);
             System.out.println("Роль создана: " + role.getName() + " (id=" + role.getId() + ")");
+            system.getAuditLog().log("ROLE_CREATE", performer, role.getName(), "permissions=" + role.getPermissions().size());
         } catch (Exception e) {
             System.out.println("Ошибка создания роли: " + e.getMessage());
+            system.getAuditLog().log("ROLE_CREATE_FAILED", performer, name, e.getMessage());
         }
     }
 
@@ -301,9 +316,11 @@ public final class CommandRegistry {
         AssignmentManager am = system.getAssignmentManager();
 
         String roleName = promptNonBlank(scanner, "role name");
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         Optional<Role> opt = rm.findByName(roleName);
         if (opt.isEmpty()) {
             System.out.println("Роль не найдена: " + roleName);
+            system.getAuditLog().log("ROLE_DELETE_FAILED", performer, roleName, "role not found");
             return;
         }
 
@@ -316,20 +333,24 @@ public final class CommandRegistry {
                     .distinct()
                     .sorted()
                     .forEach(u -> System.out.println("- " + u));
+            system.getAuditLog().log("ROLE_DELETE_FAILED", performer, roleName, "role is assigned (" + assigned.size() + " assignment(s))");
             return;
         }
 
         System.out.println("Удалить роль: " + role.getName() + " (id=" + role.getId() + ")");
         if (!confirm(scanner, "Подтвердите удаление (введите \"да\")")) {
             System.out.println("Удаление отменено.");
+            system.getAuditLog().log("ROLE_DELETE_CANCELLED", performer, roleName, "cancelled by user");
             return;
         }
 
         try {
             boolean removed = rm.remove(role);
             System.out.println(removed ? "Роль удалена." : "Не удалось удалить роль.");
+            system.getAuditLog().log(removed ? "ROLE_DELETE" : "ROLE_DELETE_FAILED", performer, roleName, removed ? "" : "remove returned false");
         } catch (Exception e) {
             System.out.println("Ошибка удаления роли: " + e.getMessage());
+            system.getAuditLog().log("ROLE_DELETE_FAILED", performer, roleName, e.getMessage());
         }
     }
 
@@ -420,9 +441,11 @@ public final class CommandRegistry {
         AssignmentManager am = system.getAssignmentManager();
 
         String username = promptNonBlank(scanner, "username");
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
             System.out.println("Пользователь не найден: " + username);
+            system.getAuditLog().log("ASSIGN_ROLE_FAILED", performer, username, "user not found");
             return;
         }
 
@@ -448,7 +471,7 @@ public final class CommandRegistry {
         int type = promptInt(scanner, "Выберите тип (1-2)", 1, 2);
 
         String reason = promptNonBlank(scanner, "reason");
-        String assignedBy = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
+        String assignedBy = performer;
         AssignmentMetadata meta = AssignmentMetadata.now(assignedBy, reason);
 
         try {
@@ -462,8 +485,15 @@ public final class CommandRegistry {
 
             am.add(assignment);
             System.out.println("Назначение создано: id=" + assignment.assignmentId());
+            system.getAuditLog().log(
+                    "ASSIGN_ROLE",
+                    performer,
+                    username,
+                    "role=" + role.getName() + ", type=" + assignment.assignmentType() + ", id=" + assignment.assignmentId() + ", reason=" + reason
+            );
         } catch (Exception e) {
             System.out.println("Ошибка назначения роли: " + e.getMessage());
+            system.getAuditLog().log("ASSIGN_ROLE_FAILED", performer, username, "role=" + role.getName() + ", error=" + e.getMessage());
         }
     }
 
@@ -472,9 +502,11 @@ public final class CommandRegistry {
         AssignmentManager am = system.getAssignmentManager();
 
         String username = promptNonBlank(scanner, "username");
+        String performer = system.getCurrentUser() != null ? system.getCurrentUser() : "system";
         User user = um.findByUsername(username).orElse(null);
         if (user == null) {
             System.out.println("Пользователь не найден: " + username);
+            system.getAuditLog().log("REVOKE_ROLE_FAILED", performer, username, "user not found");
             return;
         }
 
@@ -501,12 +533,40 @@ public final class CommandRegistry {
             if (chosen instanceof PermanentAssignment pa) {
                 pa.revoke();
                 System.out.println("Постоянное назначение отозвано (помечено неактивным).");
+                system.getAuditLog().log(
+                        "REVOKE_ROLE",
+                        performer,
+                        username,
+                        "role=" + chosen.role().getName() + ", type=" + chosen.assignmentType() + ", id=" + chosen.assignmentId() + ", method=mark-inactive"
+                );
             } else {
                 am.revokeAssignment(chosen.assignmentId());
                 System.out.println("Назначение удалено.");
+                system.getAuditLog().log(
+                        "REVOKE_ROLE",
+                        performer,
+                        username,
+                        "role=" + chosen.role().getName() + ", type=" + chosen.assignmentType() + ", id=" + chosen.assignmentId() + ", method=remove"
+                );
             }
         } catch (Exception e) {
             System.out.println("Ошибка отзыва: " + e.getMessage());
+            system.getAuditLog().log(
+                    "REVOKE_ROLE_FAILED",
+                    performer,
+                    username,
+                    "role=" + chosen.role().getName() + ", id=" + chosen.assignmentId() + ", error=" + e.getMessage()
+            );
+        }
+    }
+
+    private static void auditLog(Scanner scanner, RBACSystem system) {
+        AuditLog log = system.getAuditLog();
+        log.printLog();
+
+        if (confirm(scanner, "Сохранить лог в файл? (введите \"да\")")) {
+            String filename = promptNonBlank(scanner, "filename");
+            log.saveToFile(filename);
         }
     }
 
