@@ -1,5 +1,6 @@
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class AssignmentManager implements Repository<RoleAssignment> {
     private final Object lock = new Object();
@@ -130,11 +131,31 @@ public class AssignmentManager implements Repository<RoleAssignment> {
         }
     }
 
+    public List<RoleAssignment> findByFilterParallel(AssignmentFilter filter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        List<RoleAssignment> snapshot;
+        synchronized (lock) {
+            snapshot = new ArrayList<>(assignments.values());
+        }
+        return snapshot.parallelStream()
+                .filter(filter::test)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     public List<RoleAssignment> findAll(AssignmentFilter filter, Comparator<RoleAssignment> sorter) {
         Objects.requireNonNull(filter, "filter не может быть null");
         Objects.requireNonNull(sorter, "sorter не может быть null");
 
         List<RoleAssignment> filtered = findByFilter(filter);
+        filtered.sort(sorter);
+        return filtered;
+    }
+
+    public List<RoleAssignment> findAllParallel(AssignmentFilter filter, Comparator<RoleAssignment> sorter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        Objects.requireNonNull(sorter, "sorter не может быть null");
+
+        List<RoleAssignment> filtered = findByFilterParallel(filter);
         filtered.sort(sorter);
         return filtered;
     }

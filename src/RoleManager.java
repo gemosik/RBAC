@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class RoleManager implements Repository<Role> {
 
@@ -104,11 +105,31 @@ public class RoleManager implements Repository<Role> {
         }
     }
 
+    public List<Role> findByFilterParallel(RoleFilter filter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        List<Role> snapshot;
+        synchronized (lock) {
+            snapshot = new ArrayList<>(rolesById.values());
+        }
+        return snapshot.parallelStream()
+                .filter(filter::test)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     public List<Role> findAll(RoleFilter filter, Comparator<Role> sorter) {
         Objects.requireNonNull(filter, "filter не может быть null");
         Objects.requireNonNull(sorter, "sorter не может быть null");
 
         List<Role> filtered = findByFilter(filter);
+        filtered.sort(sorter);
+        return filtered;
+    }
+
+    public List<Role> findAllParallel(RoleFilter filter, Comparator<Role> sorter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        Objects.requireNonNull(sorter, "sorter не может быть null");
+
+        List<Role> filtered = findByFilterParallel(filter);
         filtered.sort(sorter);
         return filtered;
     }

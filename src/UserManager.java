@@ -1,5 +1,6 @@
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class UserManager implements Repository<User> {
 
@@ -76,11 +77,27 @@ public class UserManager implements Repository<User> {
         return result;
     }
 
+    public List<User> findByFilterParallel(UserFilter filter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        return storage.values().parallelStream()
+                .filter(filter::test)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     public List<User> findAll(UserFilter filter, Comparator<User> sorter) {
         Objects.requireNonNull(filter, "filter не может быть null");
         Objects.requireNonNull(sorter, "sorter не может быть null");
 
         List<User> filtered = findByFilter(filter);
+        filtered.sort(sorter);
+        return filtered;
+    }
+
+    public List<User> findAllParallel(UserFilter filter, Comparator<User> sorter) {
+        Objects.requireNonNull(filter, "filter не может быть null");
+        Objects.requireNonNull(sorter, "sorter не может быть null");
+
+        List<User> filtered = findByFilterParallel(filter);
         filtered.sort(sorter);
         return filtered;
     }
