@@ -107,5 +107,15 @@ public class CommandRegistryTest {
         assertFalse(system.getUserManager().exists("user2"));
         assertEquals(1, system.getAssignmentManager().count());
     }
+
+    @Test
+    void rbacSystemProvidesBackgroundExecutor() {
+        RBACSystem system = new RBACSystem();
+        assertNotNull(system.getBackgroundExecutor());
+        assertNotNull(system.getBackgroundExecutor().executor());
+        assertFalse(system.getBackgroundExecutor().isShutdown());
+        system.shutdown();
+        assertTrue(system.getBackgroundExecutor().isShutdown());
+    }
 }
 

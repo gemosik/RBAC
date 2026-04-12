@@ -841,6 +841,7 @@ public final class CommandRegistry {
             return;
         }
         System.out.println("Завершение программы.");
+        system.shutdown();
         System.exit(0);
     }
 
