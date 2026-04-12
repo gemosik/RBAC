@@ -64,6 +64,43 @@ public class ReportGeneratorTest {
     }
 
     @Test
+    void generateUserReportParallelMatchesExpectedContent() {
+        RBACSystem system = new RBACSystem();
+        system.initialize();
+
+        UserManager um = system.getUserManager();
+        RoleManager rm = system.getRoleManager();
+        AssignmentManager am = system.getAssignmentManager();
+
+        User john = User.create("john_user", "John User", "john_user@example.com");
+        um.add(john);
+
+        Role viewer = rm.findByName("Viewer").orElseThrow();
+        am.add(new PermanentAssignment(john, viewer, AssignmentMetadata.now("admin", "test")));
+
+        ReportGenerator rg = new ReportGenerator();
+        String report = rg.generateUserReportParallel(um, am);
+
+        assertTrue(report.contains("[parallel]"));
+        assertTrue(report.contains("john_user"));
+        assertTrue(report.contains("Viewer"));
+    }
+
+    @Test
+    void generatePermissionMatrixParallelContainsResourcesAndPermissions() {
+        RBACSystem system = new RBACSystem();
+        system.initialize();
+
+        ReportGenerator rg = new ReportGenerator();
+        String report = rg.generatePermissionMatrixParallel(system.getUserManager(), system.getAssignmentManager());
+
+        assertTrue(report.contains("[parallel]"));
+        assertTrue(report.contains("Матрица прав"));
+        assertTrue(report.contains("users"));
+        assertTrue(report.contains("READ"));
+    }
+
+    @Test
     void exportToFileWritesReport() throws Exception {
         ReportGenerator rg = new ReportGenerator();
         String report = "hello report";

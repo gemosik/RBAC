@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class ReportGenerator {
 
@@ -39,29 +41,63 @@ public class ReportGenerator {
         }
 
         for (User user : users) {
-            List<RoleAssignment> active = assignmentManager.findByUser(user).stream()
-                    .filter(RoleAssignment::isActive)
-                    .sorted(Comparator.comparing(a -> a.role().getName()))
-                    .toList();
-
-            List<String> roleNames = active.stream()
-                    .map(a -> a.role().getName())
-                    .distinct()
-                    .sorted()
-                    .toList();
-
-            Set<Permission> permissions = assignmentManager.getUserPermissions(user);
-            Set<String> resources = permissions.stream().map(Permission::resource).collect(Collectors.toCollection(TreeSet::new));
-
-            sb.append(String.format("- %s%n", user.format()));
-            sb.append(String.format("  Roles (%d): %s%n", roleNames.size(), roleNames.isEmpty() ? "—" : String.join(", ", roleNames)));
-            sb.append(String.format("  Permissions: %d, resources: %d%n", permissions.size(), resources.size()));
-            if (!resources.isEmpty()) {
-                sb.append(String.format("  Resources: %s%n", String.join(", ", resources)));
-            }
-            sb.append(System.lineSeparator());
+            sb.append(formatUserReportSection(user, assignmentManager));
         }
 
+        return sb.toString();
+    }
+
+    public String generateUserReportParallel(UserManager userManager, AssignmentManager assignmentManager) {
+        Objects.requireNonNull(userManager, "userManager не может быть null");
+        Objects.requireNonNull(assignmentManager, "assignmentManager не может быть null");
+
+        List<User> users = new ArrayList<>(userManager.findAll());
+        users.sort(Comparator.comparing(User::username));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("=== Отчёт по пользователям (roles) [parallel] ===%n"));
+        sb.append(String.format("Generated at: %s%n", LocalDateTime.now().format(TS)));
+        sb.append(String.format("Users: %d%n", users.size()));
+        sb.append(System.lineSeparator());
+
+        if (users.isEmpty()) {
+            sb.append(String.format("(пользователи отсутствуют)%n"));
+            return sb.toString();
+        }
+
+        String[] sections = new String[users.size()];
+        IntStream.range(0, users.size()).parallel().forEach(i ->
+                sections[i] = formatUserReportSection(users.get(i), assignmentManager));
+        for (String section : sections) {
+            sb.append(section);
+        }
+
+        return sb.toString();
+    }
+
+    private static String formatUserReportSection(User user, AssignmentManager assignmentManager) {
+        List<RoleAssignment> active = assignmentManager.findByUser(user).stream()
+                .filter(RoleAssignment::isActive)
+                .sorted(Comparator.comparing(a -> a.role().getName()))
+                .toList();
+
+        List<String> roleNames = active.stream()
+                .map(a -> a.role().getName())
+                .distinct()
+                .sorted()
+                .toList();
+
+        Set<Permission> permissions = assignmentManager.getUserPermissions(user);
+        Set<String> resources = permissions.stream().map(Permission::resource).collect(Collectors.toCollection(TreeSet::new));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("- %s%n", user.format()));
+        sb.append(String.format("  Roles (%d): %s%n", roleNames.size(), roleNames.isEmpty() ? "—" : String.join(", ", roleNames)));
+        sb.append(String.format("  Permissions: %d, resources: %d%n", permissions.size(), resources.size()));
+        if (!resources.isEmpty()) {
+            sb.append(String.format("  Resources: %s%n", String.join(", ", resources)));
+        }
+        sb.append(System.lineSeparator());
         return sb.toString();
     }
 
@@ -155,6 +191,71 @@ public class ReportGenerator {
 
             Map<String, Set<String>> perRes = matrix.getOrDefault(u.username(), Map.of());
             for (String res : resources) {
+                Set<String> names = perRes.getOrDefault(res, Set.of());
+                row.add(names.isEmpty() ? "—" : String.join(",", names));
+            }
+            rows.add(row.toArray(new String[0]));
+        }
+
+        sb.append(FormatUtils.formatTable(headers, rows));
+        sb.append(System.lineSeparator());
+        sb.append(String.format("Legend: cell содержит список permission.name (например, READ,WRITE).%n"));
+        return sb.toString();
+    }
+
+    public String generatePermissionMatrixParallel(UserManager userManager, AssignmentManager assignmentManager) {
+        Objects.requireNonNull(userManager, "userManager не может быть null");
+        Objects.requireNonNull(assignmentManager, "assignmentManager не может быть null");
+
+        List<User> users = new ArrayList<>(userManager.findAll());
+        users.sort(Comparator.comparing(User::username));
+
+        Map<String, Map<String, Set<String>>> matrix = new ConcurrentHashMap<>();
+        Set<String> resources = ConcurrentHashMap.newKeySet();
+
+        users.parallelStream().forEach(u -> {
+            Set<Permission> perms = assignmentManager.getUserPermissions(u);
+            Map<String, Set<String>> perResource = new HashMap<>();
+            for (Permission p : perms) {
+                resources.add(p.resource());
+                perResource.computeIfAbsent(p.resource(), k -> new TreeSet<>()).add(p.name());
+            }
+            matrix.put(u.username(), perResource);
+        });
+
+        TreeSet<String> sortedResources = new TreeSet<>(resources);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("=== Матрица прав (users × resources) [parallel] ===%n"));
+        sb.append(String.format("Generated at: %s%n", LocalDateTime.now().format(TS)));
+        sb.append(String.format("Users: %d, Resources: %d%n", users.size(), sortedResources.size()));
+        sb.append(System.lineSeparator());
+
+        if (users.isEmpty()) {
+            sb.append(String.format("(пользователи отсутствуют)%n"));
+            return sb.toString();
+        }
+
+        if (sortedResources.isEmpty()) {
+            sb.append(String.format("(ресурсы/права отсутствуют)%n"));
+            return sb.toString();
+        }
+
+        String[] headers = new String[1 + sortedResources.size()];
+        headers[0] = "User";
+        int hi = 1;
+        for (String res : sortedResources) {
+            headers[hi++] = res;
+        }
+
+        List<String[]> rows = new ArrayList<>();
+
+        for (User u : users) {
+            List<String> row = new ArrayList<>();
+            row.add(u.username());
+
+            Map<String, Set<String>> perRes = matrix.getOrDefault(u.username(), Map.of());
+            for (String res : sortedResources) {
                 Set<String> names = perRes.getOrDefault(res, Set.of());
                 row.add(names.isEmpty() ? "—" : String.join(",", names));
             }
