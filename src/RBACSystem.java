@@ -36,6 +36,15 @@ public class RBACSystem {
 
     public void shutdown() {
         backgroundExecutor.close();
+        auditLog.shutdown();
+    }
+
+    public void awaitAuditIdle(long timeoutMs) {
+        try {
+            auditLog.awaitIdle(timeoutMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public void setCurrentUser(String username) {

@@ -52,8 +52,11 @@ public final class CommandRegistry {
         parser.registerCommand("audit-log", "Просмотр audit log (и сохранение в файл)", CommandRegistry::auditLog);
 
         parser.registerCommand("report-users", "Отчёт по пользователям с их ролями (вывести/сохранить)", CommandRegistry::reportUsers);
+        parser.registerCommand("report-users-async", "Отчёт по пользователям — генерация в фоне, вывод по готовности", CommandRegistry::reportUsersAsync);
         parser.registerCommand("report-roles", "Отчёт по ролям с количеством пользователей (вывести/сохранить)", CommandRegistry::reportRoles);
         parser.registerCommand("report-matrix", "Матрица прав (users × resources) (вывести/сохранить)", CommandRegistry::reportMatrix);
+
+        parser.registerCommand("save-async", "Сохранить audit log в файл в фоновом потоке", CommandRegistry::saveAsync);
     }
 
 
@@ -582,6 +585,40 @@ public final class CommandRegistry {
         String report = rg.generateUserReport(system.getUserManager(), system.getAssignmentManager());
         System.out.println(report);
         exportReport(scanner, rg, report);
+    }
+
+    private static void reportUsersAsync(Scanner scanner, RBACSystem system) {
+        ReportGenerator rg = new ReportGenerator();
+        System.out.println("Генерация отчёта по пользователям запущена в фоновом потоке…");
+        system.getBackgroundExecutor().execute(() -> {
+            try {
+                String report = rg.generateUserReport(system.getUserManager(), system.getAssignmentManager());
+                synchronized (System.out) {
+                    System.out.println();
+                    System.out.println("=== Отчёт по пользователям (готово) ===");
+                    System.out.println(report);
+                }
+            } catch (Exception e) {
+                synchronized (System.out) {
+                    System.out.println("Ошибка фоновой генерации отчёта: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    private static void saveAsync(Scanner scanner, RBACSystem system) {
+        System.out.println(ConsoleUtils.formatHeader("Фоновое сохранение audit log"));
+        String filename = ConsoleUtils.promptString(scanner, "filename", true);
+        System.out.println("Сохранение audit log поставлено в очередь фонового пула.");
+        system.getBackgroundExecutor().execute(() -> {
+            try {
+                system.getAuditLog().saveToFile(filename);
+            } catch (Exception e) {
+                synchronized (System.out) {
+                    System.out.println("Ошибка фонового сохранения: " + e.getMessage());
+                }
+            }
+        });
     }
 
     private static void reportRoles(Scanner scanner, RBACSystem system) {
