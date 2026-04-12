@@ -83,6 +83,23 @@ public class AssignmentManagerTest {
     }
 
     @Test
+    void revokeExpiredTemporaryAssignmentsRevokesOnce() {
+        User user = User.create("john", "John Doe", "john@example.com");
+        Role role = new Role("ADMIN", "Admin role");
+        AssignmentManager manager = createManagerWithUserAndRole(user, role);
+
+        AssignmentMetadata metadata = AssignmentMetadata.now("system", "test");
+        TemporaryAssignment expiredTemp = new TemporaryAssignment(
+                user, role, metadata, "2000-01-01", false
+        );
+        manager.add(expiredTemp);
+
+        assertEquals(1, manager.revokeExpiredTemporaryAssignments());
+        assertTrue(expiredTemp.isRevoked());
+        assertEquals(0, manager.revokeExpiredTemporaryAssignments());
+    }
+
+    @Test
     void userHasRoleAndPermission() {
         User user = User.create("john", "John Doe", "john@example.com");
         Role role = new Role("ADMIN", "Admin role");

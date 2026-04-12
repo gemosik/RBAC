@@ -247,6 +247,33 @@ public class AssignmentManager implements Repository<RoleAssignment> {
         }
     }
 
+    public int revokeExpiredTemporaryAssignments() {
+        List<RoleAssignment> snapshot;
+        synchronized (lock) {
+            snapshot = new ArrayList<>(assignments.values());
+        }
+        List<TemporaryAssignment> candidates = new ArrayList<>();
+        for (RoleAssignment a : snapshot) {
+            if (a instanceof TemporaryAssignment t && t.isExpired() && !t.isRevoked()) {
+                candidates.add(t);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return 0;
+        }
+        int revokedCount = 0;
+        synchronized (lock) {
+            for (TemporaryAssignment t : candidates) {
+                RoleAssignment current = assignments.get(t.assignmentId());
+                if (current == t && t.isExpired() && !t.isRevoked()) {
+                    t.revoke();
+                    revokedCount++;
+                }
+            }
+        }
+        return revokedCount;
+    }
+
     public void extendTemporaryAssignment(String assignmentId, String newExpirationDate) {
         Objects.requireNonNull(assignmentId, "assignmentId не может быть null");
         Objects.requireNonNull(newExpirationDate, "newExpirationDate не может быть null");

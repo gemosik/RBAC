@@ -1,17 +1,39 @@
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 public class RBACSystem {
     private final UserManager userManager;
     private final RoleManager roleManager;
     private final AssignmentManager assignmentManager;
     private final AuditLog auditLog;
     private final BackgroundExecutor backgroundExecutor;
+    private final ScheduledExecutorService maintenanceScheduler;
     private String currentUser;
 
     public RBACSystem() {
+        this(0);
+    }
+
+    public RBACSystem(int maintenancePeriodSeconds) {
         this.userManager = new UserManager();
         this.roleManager = new RoleManager();
         this.assignmentManager = new AssignmentManager(userManager, roleManager);
         this.auditLog = new AuditLog();
         this.backgroundExecutor = new BackgroundExecutor();
+        this.maintenanceScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "rbac-maintenance");
+            t.setDaemon(true);
+            return t;
+        });
+        if (maintenancePeriodSeconds > 0) {
+            maintenanceScheduler.scheduleAtFixedRate(
+                    new PeriodicMaintenanceTask(this),
+                    maintenancePeriodSeconds,
+                    maintenancePeriodSeconds,
+                    TimeUnit.SECONDS
+            );
+        }
     }
 
     public UserManager getUserManager() {
@@ -35,6 +57,15 @@ public class RBACSystem {
     }
 
     public void shutdown() {
+        maintenanceScheduler.shutdown();
+        try {
+            if (!maintenanceScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                maintenanceScheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            maintenanceScheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         backgroundExecutor.close();
         auditLog.shutdown();
     }

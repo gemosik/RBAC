@@ -7,6 +7,7 @@ import java.util.*;
 public class TemporaryAssignment extends AbstractRoleAssignment {
     private String expiresAt;
     private boolean autoRenew;
+    private volatile boolean revoked;
 
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -27,7 +28,15 @@ public class TemporaryAssignment extends AbstractRoleAssignment {
 
     @Override
     public boolean isActive() {
-        return !isExpired();
+        return !revoked && !isExpired();
+    }
+
+    public void revoke() {
+        this.revoked = true;
+    }
+
+    public boolean isRevoked() {
+        return revoked;
     }
 
     @Override
@@ -115,7 +124,7 @@ public class TemporaryAssignment extends AbstractRoleAssignment {
     @Override
     public String summary() {
         String baseSummary = super.summary();
-        String status = isActive() ? "ACTIVE" : "EXPIRED";
+        String status = revoked ? "REVOKED" : (isActive() ? "ACTIVE" : "EXPIRED");
         String renewStatus = autoRenew ? "ENABLED" : "DISABLED";
         String timeRemaining = isActive() ? getTimeRemaining() : "N/A";
 
