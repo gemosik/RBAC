@@ -1,20 +1,19 @@
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class UserManager implements Repository<User> {
 
-    private final Map<String, User> storage = new HashMap<>();
+    private final Map<String, User> storage = new ConcurrentHashMap<>();
 
     @Override
     public void add(User user) {
         Objects.requireNonNull(user, "user не может быть null");
         String username = user.username();
 
-        if (storage.containsKey(username)) {
+        User validated = User.create(user.username(), user.fullName(), user.email());
+        if (storage.putIfAbsent(validated.username(), validated) != null) {
             throw new IllegalArgumentException("Пользователь с таким username уже существует: " + username);
         }
-
-        User validated = User.create(user.username(), user.fullName(), user.email());
-        storage.put(validated.username(), validated);
     }
 
     @Override
@@ -96,13 +95,12 @@ public class UserManager implements Repository<User> {
     public void update(String username, String newFullName, String newEmail) {
         Objects.requireNonNull(username, "username не может быть null");
 
-        User existing = storage.get(username);
-        if (existing == null) {
-            throw new NoSuchElementException("Пользователь с username " + username + " не найден");
-        }
-
-        User updated = User.create(username, newFullName, newEmail);
-        storage.put(username, updated);
+        storage.compute(username, (k, existing) -> {
+            if (existing == null) {
+                throw new NoSuchElementException("Пользователь с username " + username + " не найден");
+            }
+            return User.create(username, newFullName, newEmail);
+        });
     }
     
     @Override
