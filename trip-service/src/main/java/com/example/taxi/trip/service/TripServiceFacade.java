@@ -4,6 +4,7 @@ import com.example.taxi.trip.domain.Trip;
 import com.example.taxi.trip.domain.TripStatus;
 import com.example.taxi.trip.domain.DriverAvailabilityStatus;
 import com.example.taxi.trip.domain.DriverSlot;
+import com.example.taxi.trip.integration.TripNotificationPublisher;
 import com.example.taxi.trip.repo.DriverSlotRepository;
 import com.example.taxi.trip.repo.TripRepository;
 import com.example.taxi.trip.web.dto.CreateTripRequest;
@@ -21,10 +22,16 @@ public class TripServiceFacade {
 
 	private final TripRepository tripRepository;
 	private final DriverSlotRepository driverSlotRepository;
+	private final TripNotificationPublisher tripNotificationPublisher;
 
-	public TripServiceFacade(TripRepository tripRepository, DriverSlotRepository driverSlotRepository) {
+	public TripServiceFacade(
+		TripRepository tripRepository,
+		DriverSlotRepository driverSlotRepository,
+		TripNotificationPublisher tripNotificationPublisher
+	) {
 		this.tripRepository = tripRepository;
 		this.driverSlotRepository = driverSlotRepository;
+		this.tripNotificationPublisher = tripNotificationPublisher;
 	}
 
 	public TripResponse createTrip(CreateTripRequest request) {
@@ -42,6 +49,7 @@ public class TripServiceFacade {
 		trip.setPrice(DEFAULT_PRICE);
 
 		Trip saved = tripRepository.save(trip);
+		tripNotificationPublisher.publishTripStatusChanged(saved);
 		return toResponse(saved);
 	}
 
@@ -67,6 +75,7 @@ public class TripServiceFacade {
 			driverSlotRepository.findById(trip.getDriverId())
 				.ifPresent(slot -> slot.setStatus(DriverAvailabilityStatus.AVAILABLE));
 		}
+		tripNotificationPublisher.publishTripStatusChanged(trip);
 		return toResponse(trip);
 	}
 
