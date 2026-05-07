@@ -6,18 +6,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.taxi.trip.domain.DriverAvailabilityStatus;
+import com.example.taxi.trip.domain.DriverSlot;
+import com.example.taxi.trip.repo.DriverSlotRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class TripServiceApplicationTests {
 
 	@Autowired
@@ -25,6 +37,16 @@ class TripServiceApplicationTests {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private DriverSlotRepository driverSlotRepository;
+
+	@BeforeEach
+	void seedDrivers() {
+		driverSlotRepository.deleteAll();
+		driverSlotRepository.save(driverSlot(1L, DriverAvailabilityStatus.AVAILABLE));
+		driverSlotRepository.save(driverSlot(2L, DriverAvailabilityStatus.AVAILABLE));
+	}
 
 	@Test
 	void createAndGetTripWorks() throws Exception {
@@ -40,7 +62,8 @@ class TripServiceApplicationTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(payload))
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.status").value("CREATED"))
+			.andExpect(jsonPath("$.status").value("DRIVER_ASSIGNED"))
+			.andExpect(jsonPath("$.driverId").isNumber())
 			.andReturn();
 
 		Map<?, ?> body = objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
@@ -98,9 +121,61 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
+	void concurrentTripCreationDoesNotAssignSameDriverTwice() throws Exception {
+		driverSlotRepository.deleteAll();
+		driverSlotRepository.save(driverSlot(99L, DriverAvailabilityStatus.AVAILABLE));
+
+		String payload = """
+			{
+			  "passengerId": 700,
+			  "origin": "Point A",
+			  "destination": "Point B"
+			}
+			""";
+
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		try {
+			Callable<Integer> createTripTask = () -> mockMvc.perform(post("/trips")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(payload))
+				.andReturn()
+				.getResponse()
+				.getStatus();
+
+			List<Future<Integer>> futures = new ArrayList<>();
+			futures.add(pool.submit(createTripTask));
+			futures.add(pool.submit(createTripTask));
+
+			int success = 0;
+			int conflict = 0;
+			for (Future<Integer> future : futures) {
+				int statusCode = future.get();
+				if (statusCode == 201) {
+					success++;
+				}
+				if (statusCode == 409) {
+					conflict++;
+				}
+			}
+
+			org.junit.jupiter.api.Assertions.assertEquals(1, success);
+			org.junit.jupiter.api.Assertions.assertEquals(1, conflict);
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
+	@Test
 	void getUnknownTripReturns404() throws Exception {
 		mockMvc.perform(get("/trips/99999"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("Trip not found: 99999"));
+	}
+
+	private DriverSlot driverSlot(Long driverId, DriverAvailabilityStatus status) {
+		DriverSlot slot = new DriverSlot();
+		slot.setDriverId(driverId);
+		slot.setStatus(status);
+		return slot;
 	}
 }
