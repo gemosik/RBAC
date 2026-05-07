@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -28,6 +29,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(BadRequestException.class)
 	public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
 		return build(HttpStatus.BAD_REQUEST, ex.getMessage());
+	}
+
+	@ExceptionHandler(AuthenticationException.class)
+	public ResponseEntity<Map<String, Object>> handleAuth(AuthenticationException ex) {
+		return build(HttpStatus.UNAUTHORIZED, "Invalid credentials");
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

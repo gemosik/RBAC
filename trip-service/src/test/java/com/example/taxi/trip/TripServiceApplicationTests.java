@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,16 +42,20 @@ class TripServiceApplicationTests {
 	@Autowired
 	private DriverSlotRepository driverSlotRepository;
 
+	private String authHeaderValue;
+
 	@BeforeEach
-	void seedDrivers() {
+	void seedDrivers() throws Exception {
 		driverSlotRepository.deleteAll();
 		driverSlotRepository.save(driverSlot(1L, DriverAvailabilityStatus.AVAILABLE));
 		driverSlotRepository.save(driverSlot(2L, DriverAvailabilityStatus.AVAILABLE));
+		authHeaderValue = "Bearer " + issueToken();
 	}
 
 	@Test
 	void createAndGetTripWorks() throws Exception {
-		mockMvc.perform(get("/trips/drivers/available"))
+		mockMvc.perform(get("/trips/drivers/available")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.length()").value(2));
 
@@ -65,6 +70,7 @@ class TripServiceApplicationTests {
 			""";
 
 		MvcResult createResult = mockMvc.perform(post("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(payload))
 			.andExpect(status().isCreated())
@@ -75,12 +81,14 @@ class TripServiceApplicationTests {
 		Map<?, ?> body = objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
 		Integer id = (Integer) body.get("id");
 
-		mockMvc.perform(get("/trips/{id}", id))
+		mockMvc.perform(get("/trips/{id}", id)
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.origin").value("Airport"))
 			.andExpect(jsonPath("$.price").value(25.0));
 
-		mockMvc.perform(get("/trips/drivers/available"))
+		mockMvc.perform(get("/trips/drivers/available")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.length()").value(1));
 	}
@@ -107,11 +115,13 @@ class TripServiceApplicationTests {
 			""";
 
 		MvcResult created = mockMvc.perform(post("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(payload1))
 			.andExpect(status().isCreated())
 			.andReturn();
 		mockMvc.perform(post("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(payload2))
 			.andExpect(status().isCreated());
@@ -119,7 +129,9 @@ class TripServiceApplicationTests {
 		Map<?, ?> body = objectMapper.readValue(created.getResponse().getContentAsString(), Map.class);
 		Integer firstTripId = (Integer) body.get("id");
 
-		mockMvc.perform(get("/trips").param("passenger_id", "500"))
+		mockMvc.perform(get("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
+				.param("passenger_id", "500"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.length()").value(2));
 
@@ -129,6 +141,7 @@ class TripServiceApplicationTests {
 			}
 			""";
 		mockMvc.perform(patch("/trips/{id}/status", firstTripId)
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(patchPayload))
 			.andExpect(status().isOk())
@@ -153,6 +166,7 @@ class TripServiceApplicationTests {
 		ExecutorService pool = Executors.newFixedThreadPool(2);
 		try {
 			Callable<Integer> createTripTask = () -> mockMvc.perform(post("/trips")
+					.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(payload))
 				.andReturn()
@@ -184,7 +198,8 @@ class TripServiceApplicationTests {
 
 	@Test
 	void getUnknownTripReturns404() throws Exception {
-		mockMvc.perform(get("/trips/99999"))
+		mockMvc.perform(get("/trips/99999")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("Trip not found: 99999"));
 	}
@@ -202,6 +217,7 @@ class TripServiceApplicationTests {
 			""";
 
 		MvcResult createResult = mockMvc.perform(post("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(payload))
 			.andExpect(status().isCreated())
@@ -215,6 +231,7 @@ class TripServiceApplicationTests {
 			}
 			""";
 		mockMvc.perform(patch("/trips/{id}/status", tripId)
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(completePayload))
 			.andExpect(status().isOk());
@@ -225,16 +242,24 @@ class TripServiceApplicationTests {
 			}
 			""";
 		mockMvc.perform(patch("/trips/{id}/rating", tripId)
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(ratePayload))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.rating").value(5))
 			.andExpect(jsonPath("$.price").value(40.0));
 
-		mockMvc.perform(get("/trips/stats"))
+		mockMvc.perform(get("/trips/stats")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.tripsCount").isNumber())
 			.andExpect(jsonPath("$.averagePrice").isNumber());
+	}
+
+	@Test
+	void tripsEndpointsRequireToken() throws Exception {
+		mockMvc.perform(get("/trips/stats"))
+			.andExpect(status().isForbidden());
 	}
 
 	private DriverSlot driverSlot(Long driverId, DriverAvailabilityStatus status) {
@@ -242,5 +267,22 @@ class TripServiceApplicationTests {
 		slot.setDriverId(driverId);
 		slot.setStatus(status);
 		return slot;
+	}
+
+	private String issueToken() throws Exception {
+		String loginPayload = """
+			{
+			  "username": "manager",
+			  "password": "manager123"
+			}
+			""";
+		MvcResult result = mockMvc.perform(post("/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(loginPayload))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.token").isString())
+			.andReturn();
+		Map<?, ?> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+		return (String) body.get("token");
 	}
 }
