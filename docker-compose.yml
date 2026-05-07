@@ -1,0 +1,44 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8083:8083"
+    depends_on:
+      - redis
+
+  trip-service:
+    build:
+      context: .
+      dockerfile: trip-service/Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CACHE_TYPE: redis
+      SPRING_DATA_REDIS_HOST: redis
+      TRIP_INTEGRATION_NOTIFICATION_BASE_URL: http://notification-service:8083
+      SECURITY_JWT_SECRET: ChangeThisSecretKeyToAtLeast32BytesForHS256
+      SECURITY_JWT_EXPIRATION_SECONDS: 3600
+    ports:
+      - "8082:8082"
+    depends_on:
+      - redis
+      - notification-service

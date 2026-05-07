@@ -5,6 +5,7 @@ import com.example.taxi.trip.web.dto.CreateTripRequest;
 import com.example.taxi.trip.web.dto.RateTripRequest;
 import com.example.taxi.trip.web.dto.TripStatsResponse;
 import com.example.taxi.trip.web.dto.TripResponse;
+import com.example.taxi.trip.web.dto.UpdateDriverAvailabilityRequest;
 import com.example.taxi.trip.web.dto.UpdateTripStatusRequest;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -70,5 +71,14 @@ public class TripController {
 	@GetMapping("/drivers/available")
 	public List<Long> getAvailableDrivers() {
 		return tripServiceFacade.getAvailableDriverIds();
+	}
+
+	@PatchMapping("/drivers/{driverId}/availability")
+	@ResponseStatus(HttpStatus.OK)
+	public void updateDriverAvailability(
+		@PathVariable Long driverId,
+		@Valid @RequestBody UpdateDriverAvailabilityRequest request
+	) {
+		tripServiceFacade.updateDriverAvailability(driverId, request.status());
 	}
 }

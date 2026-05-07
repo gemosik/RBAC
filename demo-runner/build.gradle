@@ -1,0 +1,11 @@
+plugins {
+	id 'application'
+}
+
+application {
+	mainClass = 'com.example.taxi.demo.DemoRunnerApplication'
+}
+
+dependencies {
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+}

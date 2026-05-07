@@ -118,6 +118,17 @@ public class TripServiceFacade {
 		return driverAvailabilityCacheService.getAvailableDriverIds();
 	}
 
+	public void updateDriverAvailability(Long driverId, DriverAvailabilityStatus status) {
+		DriverSlot slot = driverSlotRepository.findById(driverId).orElseGet(() -> {
+			DriverSlot created = new DriverSlot();
+			created.setDriverId(driverId);
+			return created;
+		});
+		slot.setStatus(status);
+		driverSlotRepository.save(slot);
+		driverAvailabilityCacheService.evictAvailableDriversCache();
+	}
+
 	private TripResponse toResponse(Trip trip) {
 		return new TripResponse(
 			trip.getId(),
