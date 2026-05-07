@@ -50,6 +50,10 @@ class TripServiceApplicationTests {
 
 	@Test
 	void createAndGetTripWorks() throws Exception {
+		mockMvc.perform(get("/trips/drivers/available"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(2));
+
 		String payload = """
 			{
 			  "passengerId": 100,
@@ -75,6 +79,10 @@ class TripServiceApplicationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.origin").value("Airport"))
 			.andExpect(jsonPath("$.price").value(25.0));
+
+		mockMvc.perform(get("/trips/drivers/available"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(1));
 	}
 
 	@Test

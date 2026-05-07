@@ -25,22 +25,29 @@ public class TripServiceFacade {
 	private final TripRepository tripRepository;
 	private final DriverSlotRepository driverSlotRepository;
 	private final TripNotificationPublisher tripNotificationPublisher;
+	private final DriverAvailabilityCacheService driverAvailabilityCacheService;
 
 	public TripServiceFacade(
 		TripRepository tripRepository,
 		DriverSlotRepository driverSlotRepository,
-		TripNotificationPublisher tripNotificationPublisher
+		TripNotificationPublisher tripNotificationPublisher,
+		DriverAvailabilityCacheService driverAvailabilityCacheService
 	) {
 		this.tripRepository = tripRepository;
 		this.driverSlotRepository = driverSlotRepository;
 		this.tripNotificationPublisher = tripNotificationPublisher;
+		this.driverAvailabilityCacheService = driverAvailabilityCacheService;
 	}
 
 	public TripResponse createTrip(CreateTripRequest request) {
+		if (driverAvailabilityCacheService.getAvailableDriverIds().isEmpty()) {
+			throw new ConflictException("No available drivers at the moment");
+		}
 		DriverSlot slot = driverSlotRepository.findAvailableForUpdate(PageRequest.of(0, 1)).stream()
 			.findFirst()
 			.orElseThrow(() -> new ConflictException("No available drivers at the moment"));
 		slot.setStatus(DriverAvailabilityStatus.BUSY);
+		driverAvailabilityCacheService.evictAvailableDriversCache();
 
 		Trip trip = new Trip();
 		trip.setPassengerId(request.passengerId());
@@ -77,7 +84,10 @@ public class TripServiceFacade {
 		trip.setStatus(status);
 		if ((status == TripStatus.COMPLETED || status == TripStatus.CANCELLED) && trip.getDriverId() != null) {
 			driverSlotRepository.findById(trip.getDriverId())
-				.ifPresent(slot -> slot.setStatus(DriverAvailabilityStatus.AVAILABLE));
+				.ifPresent(slot -> {
+					slot.setStatus(DriverAvailabilityStatus.AVAILABLE);
+					driverAvailabilityCacheService.evictAvailableDriversCache();
+				});
 		}
 		tripNotificationPublisher.publishTripStatusChanged(trip);
 		return toResponse(trip);
@@ -101,6 +111,11 @@ public class TripServiceFacade {
 		long count = tripRepository.countByCreatedAtBetween(from, to);
 		double avg = tripRepository.averagePriceForPeriod(from, to);
 		return new TripStatsResponse(date, count, avg);
+	}
+
+	@Transactional(readOnly = true)
+	public List<Long> getAvailableDriverIds() {
+		return driverAvailabilityCacheService.getAvailableDriverIds();
 	}
 
 	private TripResponse toResponse(Trip trip) {

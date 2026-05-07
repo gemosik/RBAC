@@ -66,4 +66,9 @@ public class TripController {
 	public TripStatsResponse getStats(@RequestParam(value = "date", required = false) LocalDate date) {
 		return tripServiceFacade.getStats(date == null ? LocalDate.now() : date);
 	}
+
+	@GetMapping("/drivers/available")
+	public List<Long> getAvailableDrivers() {
+		return tripServiceFacade.getAvailableDriverIds();
+	}
 }
