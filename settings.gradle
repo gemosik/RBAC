@@ -1,1 +1,5 @@
-rootProject.name = 'demo'
+rootProject.name = 'rbac-taxi-platform'
+
+include 'user-service'
+include 'trip-service'
+include 'notification-service'
