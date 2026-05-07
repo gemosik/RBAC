@@ -8,7 +8,11 @@ import com.example.taxi.trip.integration.TripNotificationPublisher;
 import com.example.taxi.trip.repo.DriverSlotRepository;
 import com.example.taxi.trip.repo.TripRepository;
 import com.example.taxi.trip.web.dto.CreateTripRequest;
+import com.example.taxi.trip.web.dto.TripStatsResponse;
 import com.example.taxi.trip.web.dto.TripResponse;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -17,8 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class TripServiceFacade {
-
-	private static final double DEFAULT_PRICE = 100.0;
 
 	private final TripRepository tripRepository;
 	private final DriverSlotRepository driverSlotRepository;
@@ -44,9 +46,11 @@ public class TripServiceFacade {
 		trip.setPassengerId(request.passengerId());
 		trip.setOrigin(request.origin());
 		trip.setDestination(request.destination());
+		trip.setDistance(request.distance());
+		trip.setTariff(request.tariff());
 		trip.setDriverId(slot.getDriverId());
 		trip.setStatus(TripStatus.DRIVER_ASSIGNED);
-		trip.setPrice(DEFAULT_PRICE);
+		trip.setPrice(request.distance() * request.tariff());
 
 		Trip saved = tripRepository.save(trip);
 		tripNotificationPublisher.publishTripStatusChanged(saved);
@@ -79,6 +83,26 @@ public class TripServiceFacade {
 		return toResponse(trip);
 	}
 
+	public TripResponse rateTrip(Long id, int rating) {
+		Trip trip = tripRepository.findById(id)
+			.orElseThrow(() -> new NotFoundException("Trip not found: " + id));
+		if (trip.getStatus() != TripStatus.COMPLETED) {
+			throw new BadRequestException("Trip can be rated only in COMPLETED status");
+		}
+		trip.setRating(rating);
+		return toResponse(trip);
+	}
+
+	@Transactional(readOnly = true)
+	public TripStatsResponse getStats(LocalDate date) {
+		ZoneId zone = ZoneId.systemDefault();
+		Instant from = date.atStartOfDay(zone).toInstant();
+		Instant to = date.plusDays(1).atStartOfDay(zone).toInstant();
+		long count = tripRepository.countByCreatedAtBetween(from, to);
+		double avg = tripRepository.averagePriceForPeriod(from, to);
+		return new TripStatsResponse(date, count, avg);
+	}
+
 	private TripResponse toResponse(Trip trip) {
 		return new TripResponse(
 			trip.getId(),
@@ -88,6 +112,9 @@ public class TripServiceFacade {
 			trip.getOrigin(),
 			trip.getDestination(),
 			trip.getPrice(),
+			trip.getDistance(),
+			trip.getTariff(),
+			trip.getRating(),
 			trip.getCreatedAt(),
 			trip.getUpdatedAt()
 		);

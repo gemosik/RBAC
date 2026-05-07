@@ -54,7 +54,9 @@ class TripServiceApplicationTests {
 			{
 			  "passengerId": 100,
 			  "origin": "Airport",
-			  "destination": "Downtown"
+			  "destination": "Downtown",
+			  "distance": 12.5,
+			  "tariff": 2.0
 			}
 			""";
 
@@ -71,7 +73,8 @@ class TripServiceApplicationTests {
 
 		mockMvc.perform(get("/trips/{id}", id))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.origin").value("Airport"));
+			.andExpect(jsonPath("$.origin").value("Airport"))
+			.andExpect(jsonPath("$.price").value(25.0));
 	}
 
 	@Test
@@ -80,14 +83,18 @@ class TripServiceApplicationTests {
 			{
 			  "passengerId": 500,
 			  "origin": "A",
-			  "destination": "B"
+			  "destination": "B",
+			  "distance": 10.0,
+			  "tariff": 3.0
 			}
 			""";
 		String payload2 = """
 			{
 			  "passengerId": 500,
 			  "origin": "C",
-			  "destination": "D"
+			  "destination": "D",
+			  "distance": 4.0,
+			  "tariff": 5.0
 			}
 			""";
 
@@ -129,7 +136,9 @@ class TripServiceApplicationTests {
 			{
 			  "passengerId": 700,
 			  "origin": "Point A",
-			  "destination": "Point B"
+			  "destination": "Point B",
+			  "distance": 6.0,
+			  "tariff": 2.0
 			}
 			""";
 
@@ -170,6 +179,54 @@ class TripServiceApplicationTests {
 		mockMvc.perform(get("/trips/99999"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("Trip not found: 99999"));
+	}
+
+	@Test
+	void ratingFlowAndStatsWork() throws Exception {
+		String payload = """
+			{
+			  "passengerId": 800,
+			  "origin": "X",
+			  "destination": "Y",
+			  "distance": 10.0,
+			  "tariff": 4.0
+			}
+			""";
+
+		MvcResult createResult = mockMvc.perform(post("/trips")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(payload))
+			.andExpect(status().isCreated())
+			.andReturn();
+		Map<?, ?> body = objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class);
+		Integer tripId = (Integer) body.get("id");
+
+		String completePayload = """
+			{
+			  "status": "COMPLETED"
+			}
+			""";
+		mockMvc.perform(patch("/trips/{id}/status", tripId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(completePayload))
+			.andExpect(status().isOk());
+
+		String ratePayload = """
+			{
+			  "rating": 5
+			}
+			""";
+		mockMvc.perform(patch("/trips/{id}/rating", tripId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(ratePayload))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.rating").value(5))
+			.andExpect(jsonPath("$.price").value(40.0));
+
+		mockMvc.perform(get("/trips/stats"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.tripsCount").isNumber())
+			.andExpect(jsonPath("$.averagePrice").isNumber());
 	}
 
 	private DriverSlot driverSlot(Long driverId, DriverAvailabilityStatus status) {

@@ -2,9 +2,12 @@ package com.example.taxi.trip.web;
 
 import com.example.taxi.trip.service.TripServiceFacade;
 import com.example.taxi.trip.web.dto.CreateTripRequest;
+import com.example.taxi.trip.web.dto.RateTripRequest;
+import com.example.taxi.trip.web.dto.TripStatsResponse;
 import com.example.taxi.trip.web.dto.TripResponse;
 import com.example.taxi.trip.web.dto.UpdateTripStatusRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,5 +52,18 @@ public class TripController {
 		@Valid @RequestBody UpdateTripStatusRequest request
 	) {
 		return tripServiceFacade.updateTripStatus(id, request.status());
+	}
+
+	@PatchMapping("/{id}/rating")
+	public TripResponse rateTrip(
+		@PathVariable Long id,
+		@Valid @RequestBody RateTripRequest request
+	) {
+		return tripServiceFacade.rateTrip(id, request.rating());
+	}
+
+	@GetMapping("/stats")
+	public TripStatsResponse getStats(@RequestParam(value = "date", required = false) LocalDate date) {
+		return tripServiceFacade.getStats(date == null ? LocalDate.now() : date);
 	}
 }

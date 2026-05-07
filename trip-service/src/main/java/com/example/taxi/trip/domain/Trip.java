@@ -39,6 +39,15 @@ public class Trip {
 	@Column(nullable = false)
 	private Double price;
 
+	@Column(nullable = false)
+	private Double distance;
+
+	@Column(nullable = false)
+	private Double tariff;
+
+	@Column
+	private Integer rating;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -118,5 +127,29 @@ public class Trip {
 
 	public Instant getUpdatedAt() {
 		return updatedAt;
+	}
+
+	public Double getDistance() {
+		return distance;
+	}
+
+	public void setDistance(Double distance) {
+		this.distance = distance;
+	}
+
+	public Double getTariff() {
+		return tariff;
+	}
+
+	public void setTariff(Double tariff) {
+		this.tariff = tariff;
+	}
+
+	public Integer getRating() {
+		return rating;
+	}
+
+	public void setRating(Integer rating) {
+		this.rating = rating;
 	}
 }

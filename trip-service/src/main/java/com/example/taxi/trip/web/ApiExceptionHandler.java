@@ -1,5 +1,6 @@
 package com.example.taxi.trip.web;
 
+import com.example.taxi.trip.service.BadRequestException;
 import com.example.taxi.trip.service.ConflictException;
 import com.example.taxi.trip.service.NotFoundException;
 import java.time.Instant;
@@ -22,6 +23,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(ConflictException.class)
 	public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
 		return build(HttpStatus.CONFLICT, ex.getMessage());
+	}
+
+	@ExceptionHandler(BadRequestException.class)
+	public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
+		return build(HttpStatus.BAD_REQUEST, ex.getMessage());
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

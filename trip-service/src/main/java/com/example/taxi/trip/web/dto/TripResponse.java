@@ -11,6 +11,9 @@ public record TripResponse(
 	String origin,
 	String destination,
 	Double price,
+	Double distance,
+	Double tariff,
+	Integer rating,
 	Instant createdAt,
 	Instant updatedAt
 ) {
