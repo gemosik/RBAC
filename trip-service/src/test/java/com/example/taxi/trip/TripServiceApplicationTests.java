@@ -32,6 +32,9 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
+@org.springframework.test.context.TestPropertySource(properties = {
+	"trip.integration.user-sync-enabled=false"
+})
 class TripServiceApplicationTests {
 
 	@Autowired

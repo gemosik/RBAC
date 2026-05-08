@@ -6,6 +6,7 @@ import com.example.taxi.trip.domain.TripStatus;
 import com.example.taxi.trip.domain.DriverAvailabilityStatus;
 import com.example.taxi.trip.domain.DriverSlot;
 import com.example.taxi.trip.integration.TripNotificationPublisher;
+import com.example.taxi.trip.integration.UserServiceClient;
 import com.example.taxi.trip.repo.DriverSlotRepository;
 import com.example.taxi.trip.repo.TripIdempotencyKeyRepository;
 import com.example.taxi.trip.repo.TripRepository;
@@ -39,6 +40,7 @@ public class TripServiceFacade {
 	private final DriverSlotRepository driverSlotRepository;
 	private final TripIdempotencyKeyRepository idempotencyKeyRepository;
 	private final TripNotificationPublisher tripNotificationPublisher;
+	private final UserServiceClient userServiceClient;
 	private final DriverAvailabilityCacheService driverAvailabilityCacheService;
 
 	public TripServiceFacade(
@@ -46,12 +48,14 @@ public class TripServiceFacade {
 		DriverSlotRepository driverSlotRepository,
 		TripIdempotencyKeyRepository idempotencyKeyRepository,
 		TripNotificationPublisher tripNotificationPublisher,
+		UserServiceClient userServiceClient,
 		DriverAvailabilityCacheService driverAvailabilityCacheService
 	) {
 		this.tripRepository = tripRepository;
 		this.driverSlotRepository = driverSlotRepository;
 		this.idempotencyKeyRepository = idempotencyKeyRepository;
 		this.tripNotificationPublisher = tripNotificationPublisher;
+		this.userServiceClient = userServiceClient;
 		this.driverAvailabilityCacheService = driverAvailabilityCacheService;
 	}
 
@@ -65,10 +69,14 @@ public class TripServiceFacade {
 		if (driverAvailabilityCacheService.getAvailableDriverIds().isEmpty()) {
 			throw new ConflictException("No available drivers at the moment");
 		}
+		if (!userServiceClient.passengerExists(request.passengerId())) {
+			throw new BadRequestException("Passenger not found in user-service: " + request.passengerId());
+		}
 		DriverSlot slot = driverSlotRepository.findAvailableForUpdate(PageRequest.of(0, 1)).stream()
 			.findFirst()
 			.orElseThrow(() -> new ConflictException("No available drivers at the moment"));
 		slot.setStatus(DriverAvailabilityStatus.BUSY);
+		userServiceClient.updateDriverStatus(slot.getDriverId(), DriverAvailabilityStatus.BUSY);
 		driverAvailabilityCacheService.evictAvailableDriversCache();
 
 		Trip trip = new Trip();
@@ -110,6 +118,7 @@ public class TripServiceFacade {
 			driverSlotRepository.findById(trip.getDriverId())
 				.ifPresent(slot -> {
 					slot.setStatus(DriverAvailabilityStatus.AVAILABLE);
+					userServiceClient.updateDriverStatus(slot.getDriverId(), DriverAvailabilityStatus.AVAILABLE);
 					driverAvailabilityCacheService.evictAvailableDriversCache();
 				});
 		}
