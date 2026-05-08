@@ -3,6 +3,8 @@ package com.example.taxi.notification.worker;
 import com.example.taxi.notification.domain.NotificationTask;
 import com.example.taxi.notification.domain.NotificationTaskStatus;
 import com.example.taxi.notification.repo.NotificationTaskRepository;
+import jakarta.annotation.PostConstruct;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +23,11 @@ public class NotificationProcessingService {
 	public NotificationProcessingService(NotificationTaskRepository repository, NotificationWorkerProperties properties) {
 		this.repository = repository;
 		this.properties = properties;
+	}
+
+	@PostConstruct
+	public void recoverInProgressTasksOnStartup() {
+		requeueInProgressTasks();
 	}
 
 	@Transactional
@@ -52,6 +59,17 @@ public class NotificationProcessingService {
 			task.setStatus(nextAttempt >= MAX_ATTEMPTS ? NotificationTaskStatus.FAILED : NotificationTaskStatus.PENDING);
 			log.warn("Worker {} failed to process task {} (attempt {}): {}", workerName, taskId, nextAttempt, ex.getMessage());
 		}
+	}
+
+	@Transactional
+	public int requeueInProgressTasks() {
+		List<NotificationTask> stuck = repository.findByStatus(NotificationTaskStatus.IN_PROGRESS);
+		for (NotificationTask task : stuck) {
+			int nextAttempt = task.getAttempts() + 1;
+			task.setAttempts(nextAttempt);
+			task.setStatus(nextAttempt >= MAX_ATTEMPTS ? NotificationTaskStatus.FAILED : NotificationTaskStatus.PENDING);
+		}
+		return stuck.size();
 	}
 
 	private void simulateSend(NotificationTask task, String workerName) {

@@ -8,8 +8,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.taxi.notification.domain.NotificationTask;
 import com.example.taxi.notification.domain.NotificationTaskStatus;
 import com.example.taxi.notification.repo.NotificationTaskRepository;
+import com.example.taxi.notification.worker.NotificationProcessingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +38,14 @@ class NotificationServiceApplicationTests {
 
 	@Autowired
 	private NotificationTaskRepository repository;
+
+	@Autowired
+	private NotificationProcessingService processingService;
+
+	@BeforeEach
+	void cleanDb() {
+		repository.deleteAll();
+	}
 
 	@Test
 	void createAndGetByTripWorks() throws Exception {
@@ -75,7 +90,10 @@ class NotificationServiceApplicationTests {
 		Map<?, ?> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
 		Long taskId = ((Number) body.get("id")).longValue();
 
-		NotificationTaskStatus status = awaitStatus(taskId, 2500);
+		Long locked = processingService.lockNextPendingTask();
+		Assertions.assertEquals(taskId, locked);
+		processingService.processLockedTask(taskId, "test-worker");
+		NotificationTaskStatus status = repository.findById(taskId).orElseThrow().getStatus();
 		Assertions.assertEquals(NotificationTaskStatus.SENT, status);
 	}
 
@@ -99,26 +117,88 @@ class NotificationServiceApplicationTests {
 		Map<?, ?> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
 		Long taskId = ((Number) body.get("id")).longValue();
 
-		NotificationTaskStatus status = awaitStatus(taskId, 4000);
+		for (int i = 0; i < 3; i++) {
+			Long locked = processingService.lockNextPendingTask();
+			Assertions.assertEquals(taskId, locked);
+			processingService.processLockedTask(taskId, "test-worker");
+		}
+		NotificationTaskStatus status = repository.findById(taskId).orElseThrow().getStatus();
 		NotificationTask task = repository.findById(taskId).orElseThrow();
 
 		Assertions.assertEquals(NotificationTaskStatus.FAILED, status);
 		Assertions.assertEquals(3, task.getAttempts());
 	}
 
-	private NotificationTaskStatus awaitStatus(Long taskId, long timeoutMs) throws InterruptedException {
-		long deadline = System.currentTimeMillis() + timeoutMs;
-		NotificationTaskStatus status = null;
-		while (System.currentTimeMillis() < deadline) {
-			NotificationTask task = repository.findById(taskId).orElse(null);
-			if (task != null) {
-				status = task.getStatus();
-				if (status == NotificationTaskStatus.SENT || status == NotificationTaskStatus.FAILED) {
-					return status;
+	@Test
+	void sameTaskIsNotLockedTwiceByConcurrentWorkers() throws Exception {
+		Long taskId = createNotificationTask(321L, "single-lock-check");
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		try {
+			CountDownLatch latch = new CountDownLatch(2);
+			Set<Long> lockedIds = ConcurrentHashMap.newKeySet();
+			pool.submit(() -> {
+				Long id = processingService.lockNextPendingTask();
+				if (id != null) {
+					lockedIds.add(id);
 				}
-			}
-			Thread.sleep(80);
+				latch.countDown();
+			});
+			pool.submit(() -> {
+				Long id = processingService.lockNextPendingTask();
+				if (id != null) {
+					lockedIds.add(id);
+				}
+				latch.countDown();
+			});
+			latch.await();
+			Assertions.assertEquals(1, lockedIds.size());
+			Assertions.assertTrue(lockedIds.contains(taskId));
+		} finally {
+			pool.shutdownNow();
 		}
-		return status;
+	}
+
+	@Test
+	void lockMovesTaskToInProgressBeforeProcessing() throws Exception {
+		Long taskId = createNotificationTask(654L, "in-progress-check");
+		Long locked = processingService.lockNextPendingTask();
+		Assertions.assertEquals(taskId, locked);
+		NotificationTask task = repository.findById(taskId).orElseThrow();
+		Assertions.assertEquals(NotificationTaskStatus.IN_PROGRESS, task.getStatus());
+	}
+
+	@Test
+	void restartRecoveryRequeuesStuckInProgressTasks() {
+		NotificationTask task = new NotificationTask();
+		task.setTripId(777L);
+		task.setRecipientType(com.example.taxi.notification.domain.NotificationRecipientType.PASSENGER);
+		task.setRecipientId(1L);
+		task.setMessage("stuck task");
+		task.setAttempts(0);
+		task.setStatus(NotificationTaskStatus.IN_PROGRESS);
+		repository.save(task);
+
+		int recovered = processingService.requeueInProgressTasks();
+		Assertions.assertEquals(1, recovered);
+		NotificationTask reloaded = repository.findById(task.getId()).orElseThrow();
+		Assertions.assertEquals(NotificationTaskStatus.PENDING, reloaded.getStatus());
+	}
+
+	private Long createNotificationTask(Long tripId, String message) throws Exception {
+		String payload = """
+			{
+			  "tripId": %d,
+			  "recipientType": "PASSENGER",
+			  "recipientId": 901,
+			  "message": "%s"
+			}
+			""".formatted(tripId, message);
+		MvcResult result = mockMvc.perform(post("/notifications")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(payload))
+			.andExpect(status().isCreated())
+			.andReturn();
+		Map<?, ?> body = objectMapper.readValue(result.getResponse().getContentAsString(), Map.class);
+		return ((Number) body.get("id")).longValue();
 	}
 }

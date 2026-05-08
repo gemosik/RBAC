@@ -30,6 +30,16 @@ public class NotificationTaskService {
 		return toResponse(notificationTaskRepository.save(task));
 	}
 
+	public NotificationTaskResponse createTaskIfNotExists(CreateNotificationRequest request) {
+		boolean exists = notificationTaskRepository.existsByTripIdAndRecipientTypeAndRecipientIdAndMessage(
+			request.tripId(), request.recipientType(), request.recipientId(), request.message()
+		);
+		if (exists) {
+			return null;
+		}
+		return createTask(request);
+	}
+
 	@Transactional(readOnly = true)
 	public List<NotificationTaskResponse> getByTripId(Long tripId) {
 		return notificationTaskRepository.findByTripIdOrderByCreatedAtDesc(tripId).stream()

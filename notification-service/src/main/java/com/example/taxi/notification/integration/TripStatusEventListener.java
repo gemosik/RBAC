@@ -31,14 +31,14 @@ public class TripStatusEventListener {
 			log.warn("Failed to parse trip event payload: {}", ex.getMessage());
 			return;
 		}
-		notificationTaskService.createTask(new CreateNotificationRequest(
+		notificationTaskService.createTaskIfNotExists(new CreateNotificationRequest(
 			event.tripId(),
 			NotificationRecipientType.PASSENGER,
 			event.passengerId(),
 			"Trip " + event.tripId() + " status changed to " + event.status()
 		));
 		if (event.driverId() != null) {
-			notificationTaskService.createTask(new CreateNotificationRequest(
+			notificationTaskService.createTaskIfNotExists(new CreateNotificationRequest(
 				event.tripId(),
 				NotificationRecipientType.DRIVER,
 				event.driverId(),

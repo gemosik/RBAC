@@ -1,6 +1,7 @@
 package com.example.taxi.notification.repo;
 
 import com.example.taxi.notification.domain.NotificationTask;
+import com.example.taxi.notification.domain.NotificationRecipientType;
 import com.example.taxi.notification.domain.NotificationTaskStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -16,4 +17,13 @@ public interface NotificationTaskRepository extends JpaRepository<NotificationTa
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select t from NotificationTask t where t.status = :status order by t.createdAt asc")
 	List<NotificationTask> findLockedByStatus(NotificationTaskStatus status, Pageable pageable);
+
+	List<NotificationTask> findByStatus(NotificationTaskStatus status);
+
+	boolean existsByTripIdAndRecipientTypeAndRecipientIdAndMessage(
+		Long tripId,
+		NotificationRecipientType recipientType,
+		Long recipientId,
+		String message
+	);
 }

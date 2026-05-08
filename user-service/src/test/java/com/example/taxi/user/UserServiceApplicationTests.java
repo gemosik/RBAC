@@ -92,4 +92,56 @@ class UserServiceApplicationTests {
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("Passenger not found: 99999"));
 	}
+
+	@Test
+	void duplicatePassengerEmailReturnsConflict() throws Exception {
+		String payload = """
+			{"name":"P1","email":"dup-passenger@test.com","phone":"+70000001001"}
+			""";
+		mockMvc.perform(post("/passengers").contentType(MediaType.APPLICATION_JSON).content(payload))
+			.andExpect(status().isCreated());
+		mockMvc.perform(post("/passengers").contentType(MediaType.APPLICATION_JSON).content(payload))
+			.andExpect(status().isConflict());
+	}
+
+	@Test
+	void duplicateDriverLicenseReturnsConflict() throws Exception {
+		String payload1 = """
+			{"name":"D1","email":"d1-dup@test.com","phone":"+70000001002","licenseNumber":"LIC-DUP"}
+			""";
+		String payload2 = """
+			{"name":"D2","email":"d2-dup@test.com","phone":"+70000001003","licenseNumber":"LIC-DUP"}
+			""";
+		mockMvc.perform(post("/drivers").contentType(MediaType.APPLICATION_JSON).content(payload1))
+			.andExpect(status().isCreated());
+		mockMvc.perform(post("/drivers").contentType(MediaType.APPLICATION_JSON).content(payload2))
+			.andExpect(status().isConflict());
+	}
+
+	@Test
+	void invalidPassengerPayloadReturns400() throws Exception {
+		String payload = """
+			{"name":"","email":"not-an-email","phone":""}
+			""";
+		mockMvc.perform(post("/passengers").contentType(MediaType.APPLICATION_JSON).content(payload))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void unknownDriverStatusReturns400() throws Exception {
+		String driverPayload = """
+			{"name":"Status Driver","email":"status-driver@test.com","phone":"+70000001004","licenseNumber":"LIC-STATUS-1"}
+			""";
+		MvcResult createResult = mockMvc.perform(post("/drivers")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(driverPayload))
+			.andExpect(status().isCreated())
+			.andReturn();
+		Integer id = (Integer) objectMapper.readValue(createResult.getResponse().getContentAsString(), Map.class).get("id");
+
+		mockMvc.perform(patch("/drivers/{id}/status", id)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"status\":\"SLEEPING\"}"))
+			.andExpect(status().isBadRequest());
+	}
 }

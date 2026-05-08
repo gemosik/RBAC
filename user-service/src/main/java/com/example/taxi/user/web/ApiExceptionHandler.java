@@ -4,8 +4,10 @@ import com.example.taxi.user.service.NotFoundException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -25,6 +27,16 @@ public class ApiExceptionHandler {
 			.map(error -> error.getField() + ": " + error.getDefaultMessage())
 			.orElse("Validation failed");
 		return build(HttpStatus.BAD_REQUEST, message);
+	}
+
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
+		return build(HttpStatus.BAD_REQUEST, "Malformed request");
+	}
+
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
+		return build(HttpStatus.CONFLICT, "Duplicate unique field value");
 	}
 
 	private ResponseEntity<Map<String, Object>> build(HttpStatus status, String message) {

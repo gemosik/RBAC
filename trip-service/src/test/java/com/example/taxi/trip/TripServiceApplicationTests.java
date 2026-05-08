@@ -226,6 +226,31 @@ class TripServiceApplicationTests {
 			.andExpect(status().isBadRequest());
 	}
 
+	@Test
+	void statsHistoryAndAvailableDriversEndpointsWork() throws Exception {
+		Integer id1 = createTripAndGetId(910, 2.0, 3.0, null);
+		Integer id2 = createTripAndGetId(910, 5.0, 1.0, null);
+
+		mockMvc.perform(get("/trips")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
+				.param("passenger_id", "910"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(2));
+
+		mockMvc.perform(get("/trips/stats")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.tripsCount").isNumber())
+			.andExpect(jsonPath("$.averagePrice").isNumber());
+
+		mockMvc.perform(get("/trips/drivers/available")
+				.header(HttpHeaders.AUTHORIZATION, authHeaderValue))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$").isArray());
+
+		org.junit.jupiter.api.Assertions.assertNotEquals(id1, id2);
+	}
+
 	private DriverSlot driverSlot(Long driverId, DriverAvailabilityStatus status) {
 		DriverSlot slot = new DriverSlot();
 		slot.setDriverId(driverId);
