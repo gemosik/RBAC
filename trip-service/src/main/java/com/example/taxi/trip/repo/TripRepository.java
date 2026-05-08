@@ -1,6 +1,7 @@
 package com.example.taxi.trip.repo;
 
 import com.example.taxi.trip.domain.Trip;
+import com.example.taxi.trip.domain.TripStatus;
 import java.util.List;
 import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,4 +14,8 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 
 	@Query("select coalesce(avg(t.price), 0) from Trip t where t.createdAt >= :fromInclusive and t.createdAt < :toExclusive")
 	Double averagePriceForPeriod(Instant fromInclusive, Instant toExclusive);
+
+	List<Trip> findByStatusAndStatusChangedAtBefore(TripStatus status, Instant threshold);
+
+	List<Trip> findByStatusAndRatingIsNullAndCompletedAtBefore(TripStatus status, Instant threshold);
 }

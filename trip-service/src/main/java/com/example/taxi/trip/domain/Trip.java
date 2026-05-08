@@ -48,6 +48,12 @@ public class Trip {
 	@Column
 	private Integer rating;
 
+	@Column(name = "status_changed_at", nullable = false)
+	private Instant statusChangedAt;
+
+	@Column(name = "completed_at")
+	private Instant completedAt;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -62,6 +68,7 @@ public class Trip {
 		Instant now = Instant.now();
 		this.createdAt = now;
 		this.updatedAt = now;
+		this.statusChangedAt = now;
 	}
 
 	@PreUpdate
@@ -95,6 +102,10 @@ public class Trip {
 
 	public void setStatus(TripStatus status) {
 		this.status = status;
+		this.statusChangedAt = Instant.now();
+		if (status == TripStatus.COMPLETED) {
+			this.completedAt = Instant.now();
+		}
 	}
 
 	public String getOrigin() {
@@ -151,5 +162,13 @@ public class Trip {
 
 	public void setRating(Integer rating) {
 		this.rating = rating;
+	}
+
+	public Instant getStatusChangedAt() {
+		return statusChangedAt;
+	}
+
+	public Instant getCompletedAt() {
+		return completedAt;
 	}
 }

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -33,8 +34,11 @@ public class TripController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public TripResponse createTrip(@Valid @RequestBody CreateTripRequest request) {
-		return tripServiceFacade.createTrip(request);
+	public TripResponse createTrip(
+		@Valid @RequestBody CreateTripRequest request,
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+	) {
+		return tripServiceFacade.createTrip(request, idempotencyKey);
 	}
 
 	@GetMapping("/{id}")
@@ -80,5 +84,15 @@ public class TripController {
 		@Valid @RequestBody UpdateDriverAvailabilityRequest request
 	) {
 		tripServiceFacade.updateDriverAvailability(driverId, request.status());
+	}
+
+	@PostMapping("/maintenance/reassign-stale")
+	public int reassignStaleTrips(@RequestParam(defaultValue = "5") int timeoutMinutes) {
+		return tripServiceFacade.reassignStaleAcceptedTripsInternal(timeoutMinutes);
+	}
+
+	@PostMapping("/maintenance/auto-rate")
+	public int autoRateTrips(@RequestParam(defaultValue = "24") int hours, @RequestParam(defaultValue = "3") int rating) {
+		return tripServiceFacade.applyDefaultRatingsInternal(hours, rating);
 	}
 }
