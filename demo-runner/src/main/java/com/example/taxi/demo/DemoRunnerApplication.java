@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.Instant;
 
 public class DemoRunnerApplication {
 
@@ -18,6 +20,7 @@ public class DemoRunnerApplication {
 
 	private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 	private final ObjectMapper mapper = new ObjectMapper();
+	private final long runId = Instant.now().toEpochMilli();
 
 	public static void main(String[] args) throws Exception {
 		new DemoRunnerApplication().run();
@@ -25,16 +28,18 @@ public class DemoRunnerApplication {
 
 	private void run() throws Exception {
 		System.out.println("=== Taxi Demo Runner Started ===");
+		waitForServicesReady();
 
 		String token = loginAndGetToken();
 		long passengerId = createPassenger();
-		createDriverInUserService("Driver One", "d1@test.com", "+70000000011", "LIC-501");
-		createDriverInUserService("Driver Two", "d2@test.com", "+70000000012", "LIC-502");
+		createDriverInUserService("Driver One", 1);
+		createDriverInUserService("Driver Two", 2);
 
 		seedAvailableDriver(501L, token);
 		seedAvailableDriver(502L, token);
 
 		long tripId = createTrip(passengerId, token);
+		updateTripStatus(tripId, "DRIVER_ACCEPTED", token);
 		updateTripStatus(tripId, "IN_PROGRESS", token);
 		updateTripStatus(tripId, "COMPLETED", token);
 		rateTrip(tripId, 5, token);
@@ -53,20 +58,42 @@ public class DemoRunnerApplication {
 	}
 
 	private long createPassenger() throws Exception {
-		String body = "{\"name\":\"Demo Passenger\",\"email\":\"passenger@test.com\",\"phone\":\"+70000000001\"}";
-		JsonNode node = postJson(USER_URL + "/passengers", body, null, 201);
-		long id = node.get("id").asLong();
-		System.out.println("Passenger created: id=" + id);
-		return id;
+		for (int attempt = 0; attempt < 5; attempt++) {
+			long suffix = runId + attempt;
+			String body = "{\"name\":\"Demo Passenger\",\"email\":\"passenger+" + suffix + "@test.com\",\"phone\":\""
+				+ uniquePhone(suffix) + "\"}";
+			try {
+				JsonNode node = postJson(USER_URL + "/passengers", body, null, 201);
+				long id = node.get("id").asLong();
+				System.out.println("Passenger created: id=" + id);
+				return id;
+			} catch (IllegalStateException ex) {
+				if (attempt == 4) {
+					throw ex;
+				}
+			}
+		}
+		throw new IllegalStateException("Passenger creation failed after retries");
 	}
 
-	private void createDriverInUserService(String name, String email, String phone, String license) throws Exception {
-		String body = String.format(
-			"{\"name\":\"%s\",\"email\":\"%s\",\"phone\":\"%s\",\"licenseNumber\":\"%s\"}",
-			name, email, phone, license
-		);
-		postJson(USER_URL + "/drivers", body, null, 201);
-		System.out.println("Driver registered in user-service: " + license);
+	private void createDriverInUserService(String name, int idx) throws Exception {
+		for (int attempt = 0; attempt < 5; attempt++) {
+			long suffix = runId + (idx * 100L) + attempt;
+			String license = "LIC-" + suffix;
+			String body = String.format(
+				"{\"name\":\"%s\",\"email\":\"d%d+%d@test.com\",\"phone\":\"%s\",\"licenseNumber\":\"%s\"}",
+				name, idx, suffix, uniquePhone(suffix), license
+			);
+			try {
+				postJson(USER_URL + "/drivers", body, null, 201);
+				System.out.println("Driver registered in user-service: " + license);
+				return;
+			} catch (IllegalStateException ex) {
+				if (attempt == 4) {
+					throw ex;
+				}
+			}
+		}
 	}
 
 	private void seedAvailableDriver(long driverId, String token) throws Exception {
@@ -143,10 +170,61 @@ public class DemoRunnerApplication {
 	}
 
 	private JsonNode execute(HttpRequest request, int expectedStatus) throws IOException, InterruptedException {
-		HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-		if (response.statusCode() != expectedStatus) {
-			throw new IllegalStateException("Unexpected status " + response.statusCode() + " body=" + response.body());
+		int attempts = 0;
+		while (true) {
+			attempts++;
+			try {
+				HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+				if (response.statusCode() != expectedStatus) {
+					throw new IllegalStateException(
+						"Unexpected status " + response.statusCode() + " for " + request.method() + " " + request.uri() +
+							" body=" + response.body()
+					);
+				}
+				return mapper.readTree(response.body());
+			} catch (HttpConnectTimeoutException | java.net.ConnectException ex) {
+				if (attempts >= 5) {
+					throw ex;
+				}
+				Thread.sleep(600L * attempts);
+			} catch (IOException ex) {
+				// Covers transient EOF/header parser errors while container is starting.
+				if (attempts >= 5) {
+					throw ex;
+				}
+				Thread.sleep(600L * attempts);
+			}
 		}
-		return mapper.readTree(response.body());
+	}
+
+	private void waitForServicesReady() throws Exception {
+		System.out.println("Waiting for services readiness...");
+		waitForPing(USER_URL + "/api/v1/system/ping", "user-service");
+		waitForPing(TRIP_URL + "/api/v1/system/ping", "trip-service");
+		waitForPing(NOTIFICATION_URL + "/api/v1/system/ping", "notification-service");
+	}
+
+	private void waitForPing(String url, String name) throws Exception {
+		HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+			.timeout(Duration.ofSeconds(3))
+			.GET()
+			.build();
+		for (int attempt = 1; attempt <= 30; attempt++) {
+			try {
+				HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+				if (response.statusCode() == 200) {
+					System.out.println(name + " is UP");
+					return;
+				}
+			} catch (Exception ignored) {
+			}
+			Thread.sleep(1000);
+		}
+		throw new IllegalStateException(name + " is not ready: " + url);
+	}
+
+	private String uniquePhone(long seed) {
+		long n = Math.abs(seed % 1_000_000_0000L);
+		return String.format("+7%010d", n);
 	}
 }

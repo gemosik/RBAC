@@ -1,4 +1,10 @@
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
   redis:
     image: redis:7-alpine
     ports:
@@ -21,10 +27,12 @@ services:
       dockerfile: notification-service/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      SPRING_RABBITMQ_HOST: rabbitmq
     ports:
       - "8083:8083"
     depends_on:
       - redis
+      - rabbitmq
 
   trip-service:
     build:
@@ -34,11 +42,14 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_CACHE_TYPE: redis
       SPRING_DATA_REDIS_HOST: redis
-      TRIP_INTEGRATION_NOTIFICATION_BASE_URL: http://notification-service:8083
+      SPRING_RABBITMQ_HOST: rabbitmq
+      TRIP_INTEGRATION_USER_BASE_URL: http://user-service:8081
+      TRIP_INTEGRATION_USER_SYNC_ENABLED: "true"
       SECURITY_JWT_SECRET: ChangeThisSecretKeyToAtLeast32BytesForHS256
       SECURITY_JWT_EXPIRATION_SECONDS: 3600
     ports:
       - "8082:8082"
     depends_on:
       - redis
+      - rabbitmq
       - notification-service

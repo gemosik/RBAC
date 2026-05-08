@@ -54,6 +54,8 @@ docker compose up --build -d
 ./gradlew :demo-runner:run
 ```
 
+If services are still warming up, run the same command again after 5-10 seconds.
+
 Demo runner automatically:
 - logs in to `trip-service` (`manager/manager123`)
 - creates passenger and drivers

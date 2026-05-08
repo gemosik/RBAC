@@ -1,49 +1,42 @@
 package com.example.taxi.trip.integration;
 
 import com.example.taxi.trip.domain.Trip;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 @Component
 public class TripNotificationPublisher {
 
 	private static final Logger log = LoggerFactory.getLogger(TripNotificationPublisher.class);
 
-	private final RestTemplate restTemplate;
-	private final NotificationClientProperties properties;
+	private final RabbitTemplate rabbitTemplate;
+	private final TripEventProperties properties;
+	private final ObjectMapper objectMapper;
 
-	public TripNotificationPublisher(RestTemplate restTemplate, NotificationClientProperties properties) {
-		this.restTemplate = restTemplate;
+	public TripNotificationPublisher(RabbitTemplate rabbitTemplate, TripEventProperties properties, ObjectMapper objectMapper) {
+		this.rabbitTemplate = rabbitTemplate;
 		this.properties = properties;
+		this.objectMapper = objectMapper;
 	}
 
 	public void publishTripStatusChanged(Trip trip) {
-		send(new CreateNotificationRequest(
+		TripStatusChangedEvent event = new TripStatusChangedEvent(
 			trip.getId(),
-			NotificationRecipientType.PASSENGER,
 			trip.getPassengerId(),
-			"Trip " + trip.getId() + " status changed to " + trip.getStatus()
-		));
-
-		if (trip.getDriverId() != null) {
-			send(new CreateNotificationRequest(
-				trip.getId(),
-				NotificationRecipientType.DRIVER,
-				trip.getDriverId(),
-				"Trip " + trip.getId() + " status changed to " + trip.getStatus()
-			));
-		}
-	}
-
-	private void send(CreateNotificationRequest request) {
-		String url = properties.notificationBaseUrl() + "/notifications";
+			trip.getDriverId(),
+			trip.getStatus()
+		);
 		try {
-			restTemplate.postForEntity(url, request, Void.class);
-		} catch (RestClientException ex) {
-			log.warn("Notification dispatch failed to {} for trip {}: {}", url, request.tripId(), ex.getMessage());
+			String payload = objectMapper.writeValueAsString(event);
+			rabbitTemplate.convertAndSend(properties.exchange(), properties.routingKey(), payload);
+		} catch (JsonProcessingException ex) {
+			log.warn("Trip status event serialization failed for trip {}: {}", trip.getId(), ex.getMessage());
+		} catch (Exception ex) {
+			log.warn("Trip status event publish failed for trip {}: {}", trip.getId(), ex.getMessage());
 		}
 	}
 }
