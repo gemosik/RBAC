@@ -36,7 +36,7 @@ public class TripController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public TripResponse createTrip(
 		@Valid @RequestBody CreateTripRequest request,
-		@RequestHeader(value = "Idempotency-Key") String idempotencyKey
+		@RequestHeader(value = "Idempotency-Key",required = false) String idempotencyKey
 	) {
 		return tripServiceFacade.createTrip(request, idempotencyKey);
 	}

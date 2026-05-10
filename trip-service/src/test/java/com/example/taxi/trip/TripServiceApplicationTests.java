@@ -57,7 +57,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario1_idempotencyDoubleClickCreatesSingleTrip() throws Exception {
+	void idempotencyDoubleClickCreatesSingleTrip() throws Exception {
 		String payload = tripPayload(100, 12.5, 2.0);
 		String key = "req-abc-001";
 
@@ -83,7 +83,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario2_driverAcceptedButNotStartedReassigned() throws Exception {
+	void driverAcceptedButNotStartedReassigned() throws Exception {
 		Integer tripId = createTripAndGetId(500, 8.0, 3.0, null);
 		mockMvc.perform(patch("/trips/{id}/status", tripId)
 				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
@@ -102,7 +102,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario3_tripCanBeCompletedAfterLongOfflineGap() throws Exception {
+	void tripCanBeCompletedAfterLongOfflineGap() throws Exception {
 		Integer tripId = createTripAndGetId(700, 6.0, 2.0, null);
 		mockMvc.perform(patch("/trips/{id}/status", tripId).header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DRIVER_ACCEPTED\"}"))
@@ -118,7 +118,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario4_cancelAfterDriverMovedReleasesDriver() throws Exception {
+	void cancelAfterDriverMovedReleasesDriver() throws Exception {
 		Integer tripId = createTripAndGetId(701, 6.0, 2.0, null);
 		mockMvc.perform(patch("/trips/{id}/status", tripId).header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"DRIVER_ACCEPTED\"}"))
@@ -133,7 +133,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario5_noAvailableDriversReturnsConflict() throws Exception {
+	void noAvailableDriversReturnsConflict() throws Exception {
 		driverSlotRepository.deleteAll();
 		mockMvc.perform(post("/trips")
 				.header(HttpHeaders.AUTHORIZATION, authHeaderValue)
@@ -143,7 +143,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario6_defaultRatingAppliedAfterWindow() throws Exception {
+	void defaultRatingAppliedAfterWindow() throws Exception {
 		Integer tripId = createTripAndGetId(800, 10.0, 4.0, null);
 		toCompleted(tripId);
 		mockMvc.perform(post("/trips/maintenance/auto-rate").header(HttpHeaders.AUTHORIZATION, authHeaderValue)
@@ -155,7 +155,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario7_concurrentOrdersOneDriverOnly() throws Exception {
+	void concurrentOrdersOneDriverOnly() throws Exception {
 		driverSlotRepository.deleteAll();
 		driverSlotRepository.save(driverSlot(99L, DriverAvailabilityStatus.AVAILABLE));
 		String payload = tripPayload(900, 6.0, 2.0);
@@ -183,7 +183,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario8_invalidJwtAndMissingJwtRejected() throws Exception {
+	void invalidJwtAndMissingJwtRejected() throws Exception {
 		mockMvc.perform(get("/trips/stats"))
 			.andExpect(status().isForbidden());
 		mockMvc.perform(get("/trips/stats").header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token"))
@@ -195,7 +195,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario9_validationErrorsReturn400() throws Exception {
+	void validationErrorsReturn400() throws Exception {
 		String invalid = """
 			{"passengerId": 1, "origin":"A", "destination":"B", "distance":0, "tariff":-1}
 			""";
@@ -207,7 +207,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario10_repeatRatingRejected() throws Exception {
+	void repeatRatingRejected() throws Exception {
 		Integer tripId = createTripAndGetId(901, 7.0, 2.0, null);
 		toCompleted(tripId);
 		mockMvc.perform(patch("/trips/{id}/rating", tripId).header(HttpHeaders.AUTHORIZATION, authHeaderValue)
@@ -219,7 +219,7 @@ class TripServiceApplicationTests {
 	}
 
 	@Test
-	void scenario11_invalidStatusTransitionRejected() throws Exception {
+	void invalidStatusTransitionRejected() throws Exception {
 		Integer tripId = createTripAndGetId(902, 5.0, 2.0, null);
 		mockMvc.perform(patch("/trips/{id}/status", tripId).header(HttpHeaders.AUTHORIZATION, authHeaderValue)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"COMPLETED\"}"))
