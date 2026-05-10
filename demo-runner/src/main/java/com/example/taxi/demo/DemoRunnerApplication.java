@@ -32,11 +32,11 @@ public class DemoRunnerApplication {
 
 		String token = loginAndGetToken();
 		long passengerId = createPassenger();
-		createDriverInUserService("Driver One", 1);
-		createDriverInUserService("Driver Two", 2);
+		long driver1Id = createDriverInUserService("Driver One", 1);
+		long driver2Id = createDriverInUserService("Driver Two", 2);
 
-		seedAvailableDriver(501L, token);
-		seedAvailableDriver(502L, token);
+		seedAvailableDriver(driver1Id, token);
+		seedAvailableDriver(driver2Id, token);
 
 		long tripId = createTrip(passengerId, token);
 		updateTripStatus(tripId, "DRIVER_ACCEPTED", token);
@@ -51,7 +51,7 @@ public class DemoRunnerApplication {
 
 	private String loginAndGetToken() throws Exception {
 		String body = "{\"username\":\"manager\",\"password\":\"manager123\"}";
-		JsonNode node = postJson(TRIP_URL + "/auth/login", body, null, 200);
+		JsonNode node = postJson(TRIP_URL + "/auth/login", body, null, 200,null);
 		String token = node.get("token").asText();
 		System.out.println("Token acquired.");
 		return token;
@@ -63,7 +63,7 @@ public class DemoRunnerApplication {
 			String body = "{\"name\":\"Demo Passenger\",\"email\":\"passenger+" + suffix + "@test.com\",\"phone\":\""
 				+ uniquePhone(suffix) + "\"}";
 			try {
-				JsonNode node = postJson(USER_URL + "/passengers", body, null, 201);
+				JsonNode node = postJson(USER_URL + "/passengers", body, null, 201,null);
 				long id = node.get("id").asLong();
 				System.out.println("Passenger created: id=" + id);
 				return id;
@@ -76,7 +76,7 @@ public class DemoRunnerApplication {
 		throw new IllegalStateException("Passenger creation failed after retries");
 	}
 
-	private void createDriverInUserService(String name, int idx) throws Exception {
+	private long createDriverInUserService(String name, int idx) throws Exception {
 		for (int attempt = 0; attempt < 5; attempt++) {
 			long suffix = runId + (idx * 100L) + attempt;
 			String license = "LIC-" + suffix;
@@ -85,15 +85,17 @@ public class DemoRunnerApplication {
 				name, idx, suffix, uniquePhone(suffix), license
 			);
 			try {
-				postJson(USER_URL + "/drivers", body, null, 201);
+                JsonNode node = postJson(USER_URL + "/drivers", body, null, 201,null);
+                long id = node.get("id").asLong();
 				System.out.println("Driver registered in user-service: " + license);
-				return;
+				return id;
 			} catch (IllegalStateException ex) {
 				if (attempt == 4) {
 					throw ex;
 				}
 			}
 		}
+        throw new IllegalStateException("Driver creation failed after retries");
 	}
 
 	private void seedAvailableDriver(long driverId, String token) throws Exception {
@@ -107,7 +109,8 @@ public class DemoRunnerApplication {
 			"{\"passengerId\":%d,\"origin\":\"Airport\",\"destination\":\"Center\",\"distance\":12.5,\"tariff\":2.4}",
 			passengerId
 		);
-		JsonNode node = postJson(TRIP_URL + "/trips", body, token, 201);
+        String idemKey = "unique-" + runId;
+		JsonNode node = postJson(TRIP_URL + "/trips", body, token, 201,idemKey);
 		long tripId = node.get("id").asLong();
 		double price = node.get("price").asDouble();
 		System.out.println("Trip created: id=" + tripId + ", price=" + price);
@@ -139,7 +142,7 @@ public class DemoRunnerApplication {
 		System.out.println("Notifications created: " + node.size());
 	}
 
-	private JsonNode postJson(String url, String body, String token, int expectedStatus) throws Exception {
+	private JsonNode postJson(String url, String body, String token, int expectedStatus, String idemKey) throws Exception {
 		HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
 			.timeout(Duration.ofSeconds(8))
 			.header("Content-Type", "application/json")
@@ -147,6 +150,9 @@ public class DemoRunnerApplication {
 		if (token != null) {
 			builder.header("Authorization", "Bearer " + token);
 		}
+        if (idemKey != null) {
+            builder.header("Idempotency-Key", idemKey);
+        }
 		return execute(builder.build(), expectedStatus);
 	}
 
