@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @AutoConfigureMockMvc
 class NotificationServiceApplicationTests {
 
-    @MockBean 
+    @MockBean
     private NotificationWorkerManager workerManager;
 
 	@Autowired
