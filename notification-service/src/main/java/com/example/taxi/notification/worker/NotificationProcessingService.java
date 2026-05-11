@@ -73,7 +73,6 @@ public class NotificationProcessingService {
 	}
 
 	private void simulateSend(NotificationTask task, String workerName) {
-		// Educational deterministic failure trigger to demo retries quickly.
 		if (task.getMessage().contains("[FAIL]")) {
 			throw new IllegalStateException("Simulated send failure");
 		}
